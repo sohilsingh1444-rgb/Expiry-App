@@ -1,10 +1,12 @@
 import io
 import re
+import uuid
 import hashlib
 from datetime import date, datetime
 
 import pandas as pd
 import streamlit as st
+from supabase import create_client, Client
 
 st.set_page_config(page_title="Expiry Scan App", layout="centered")
 
@@ -107,22 +109,7 @@ def load_barcode_master_from_bytes(file_bytes: bytes, file_name: str) -> pd.Data
     return prepare_barcode_master(df)
 
 
-@st.cache_data(show_spinner=False)
-def load_previous_report_from_bytes(file_bytes: bytes, file_name: str) -> pd.DataFrame:
-    if file_name.lower().endswith(".csv"):
-        try:
-            df = pd.read_csv(io.BytesIO(file_bytes), dtype=str, low_memory=False)
-        except UnicodeDecodeError:
-            df = pd.read_csv(io.BytesIO(file_bytes), dtype=str, encoding="latin1", low_memory=False)
-    else:
-        df = pd.read_excel(io.BytesIO(file_bytes), dtype=str)
-
-    df = df.copy()
-    df.columns = [str(c).strip() for c in df.columns]
-    return df
-
-
-def get_status(expiry_date_value, today_value):
+def get_status(expiry_date_value: date, today_value: date):
     days_left = (expiry_date_value - today_value).days
 
     if days_left < 0:
@@ -133,75 +120,148 @@ def get_status(expiry_date_value, today_value):
         return "Good", days_left, "No action"
 
 
-def get_last_scan_active_items(previous_df: pd.DataFrame) -> pd.DataFrame:
-    if previous_df.empty:
+# =========================================================
+# Supabase
+# =========================================================
+@st.cache_resource(show_spinner=False)
+def get_supabase() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+
+def load_rows_from_db(session_id: str) -> list[dict]:
+    supabase = get_supabase()
+    result = (
+        supabase.table("expiry_scans")
+        .select("*")
+        .eq("session_id", session_id)
+        .order("id")
+        .execute()
+    )
+
+    rows = result.data or []
+    cleaned = []
+
+    for row in rows:
+        cleaned.append(
+            {
+                "PD/User Name": row.get("pd_user_name", ""),
+                "Store / Location": row.get("store_location", ""),
+                "Barcode": row.get("barcode", ""),
+                "Item Number": row.get("item_number", ""),
+                "Description": row.get("description", ""),
+                "Qty": float(row.get("qty", 1) or 1),
+                "Expiry Date": pd.to_datetime(row.get("expiry_date")).date(),
+                "Status": row.get("status", ""),
+                "Days Left": int(row.get("days_left", 0) or 0),
+                "Scan Date": pd.to_datetime(row.get("scan_date")).date(),
+                "Action Required": row.get("action_required", ""),
+                "Remarks": row.get("remarks", ""),
+            }
+        )
+
+    return cleaned
+
+
+def insert_row_to_db(session_id: str, row: dict) -> None:
+    supabase = get_supabase()
+    payload = {
+        "session_id": session_id,
+        "pd_user_name": row["PD/User Name"],
+        "store_location": row["Store / Location"],
+        "barcode": row["Barcode"],
+        "item_number": row["Item Number"],
+        "description": row["Description"],
+        "qty": float(row["Qty"]),
+        "expiry_date": row["Expiry Date"].isoformat(),
+        "status": row["Status"],
+        "days_left": int(row["Days Left"]),
+        "scan_date": row["Scan Date"].isoformat(),
+        "action_required": row["Action Required"],
+        "remarks": row["Remarks"],
+    }
+    supabase.table("expiry_scans").insert(payload).execute()
+
+
+def delete_session_rows(session_id: str) -> None:
+    supabase = get_supabase()
+    supabase.table("expiry_scans").delete().eq("session_id", session_id).execute()
+
+
+def get_last_scan_active_items_from_db(store_location: str, current_session_id: str) -> pd.DataFrame:
+    if not store_location.strip():
         return pd.DataFrame()
 
-    df = previous_df.copy()
-    df.columns = [str(c).strip() for c in df.columns]
+    supabase = get_supabase()
+    result = (
+        supabase.table("expiry_scans")
+        .select("*")
+        .eq("store_location", store_location.strip())
+        .neq("session_id", current_session_id)
+        .order("scan_date", desc=True)
+        .order("id", desc=True)
+        .limit(5000)
+        .execute()
+    )
 
-    barcode_col = find_column(df.columns, ["barcode"])
-    scan_date_col = find_column(df.columns, ["scan date", "scandate"])
-    expiry_col = find_column(df.columns, ["expiry date", "expirydate"])
-    item_col = find_column(df.columns, ["item number", "item no", "item"])
-    desc_col = find_column(df.columns, ["description", "item description", "desc"])
-    status_col = find_column(df.columns, ["status"])
-    action_col = find_column(df.columns, ["action required"])
-
-    if barcode_col is None or scan_date_col is None or expiry_col is None:
+    rows = result.data or []
+    if not rows:
         return pd.DataFrame()
 
-    df = df.rename(columns={
-        barcode_col: "Barcode",
-        scan_date_col: "Scan Date",
-        expiry_col: "Expiry Date",
-    })
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return pd.DataFrame()
 
-    if item_col is not None:
-        df = df.rename(columns={item_col: "Item Number"})
-    else:
-        df["Item Number"] = ""
+    df["scan_date"] = pd.to_datetime(df["scan_date"], errors="coerce").dt.date
+    df["expiry_date"] = pd.to_datetime(df["expiry_date"], errors="coerce").dt.date
+    df["barcode"] = df["barcode"].apply(clean_barcode)
 
-    if desc_col is not None:
-        df = df.rename(columns={desc_col: "Description"})
-    else:
-        df["Description"] = ""
-
-    if status_col is not None:
-        df = df.rename(columns={status_col: "Status"})
-    else:
-        df["Status"] = ""
-
-    if action_col is not None:
-        df = df.rename(columns={action_col: "Action Required"})
-    else:
-        df["Action Required"] = ""
-
-    df["Barcode"] = df["Barcode"].apply(clean_barcode)
-    df["Scan Date"] = pd.to_datetime(df["Scan Date"], errors="coerce").dt.date
-    df["Expiry Date"] = pd.to_datetime(df["Expiry Date"], errors="coerce").dt.date
-
-    df = df[df["Barcode"] != ""]
-    df = df[df["Scan Date"].notna()]
-    df = df[df["Expiry Date"].notna()]
+    df = df[df["scan_date"].notna()]
+    df = df[df["expiry_date"].notna()]
+    df = df[df["barcode"] != ""]
 
     if df.empty:
         return pd.DataFrame()
 
+    last_scan_date = df["scan_date"].max()
     today = date.today()
-    last_scan_date = df["Scan Date"].max()
 
-    df = df[df["Scan Date"] == last_scan_date]
-    df = df[df["Expiry Date"] >= today]
+    df = df[df["scan_date"] == last_scan_date]
+    df = df[df["expiry_date"] >= today]
 
-    df = df.sort_values(["Barcode", "Expiry Date"], ascending=[True, True]).copy()
-    df = df.drop_duplicates(subset=["Barcode"], keep="last")
+    if df.empty:
+        return pd.DataFrame()
 
-    return df
+    df = df.sort_values(["barcode", "expiry_date"], ascending=[True, True])
+    df = df.drop_duplicates(subset=["barcode"], keep="last")
+
+    df = df.rename(
+        columns={
+            "barcode": "Barcode",
+            "item_number": "Item Number",
+            "description": "Description",
+            "expiry_date": "Expiry Date",
+            "scan_date": "Scan Date",
+            "status": "Status",
+            "action_required": "Action Required",
+        }
+    )
+
+    keep_cols = [
+        "Barcode",
+        "Item Number",
+        "Description",
+        "Expiry Date",
+        "Scan Date",
+        "Status",
+        "Action Required",
+    ]
+    return df[keep_cols]
 
 
-def get_missed_items_from_last_scan(previous_df: pd.DataFrame, current_rows: list) -> pd.DataFrame:
-    prev_active = get_last_scan_active_items(previous_df)
+def get_missed_items_from_db(store_location: str, current_session_id: str, current_rows: list[dict]) -> pd.DataFrame:
+    prev_active = get_last_scan_active_items_from_db(store_location, current_session_id)
 
     if prev_active.empty:
         return pd.DataFrame()
@@ -213,26 +273,15 @@ def get_missed_items_from_last_scan(previous_df: pd.DataFrame, current_rows: lis
 
     current_df = current_df.copy()
     current_df["Barcode"] = current_df["Barcode"].apply(clean_barcode)
-
     current_barcodes = set(current_df["Barcode"].dropna().astype(str).str.strip())
+
     missed = prev_active[~prev_active["Barcode"].isin(current_barcodes)].copy()
-
-    display_cols = [
-        col for col in [
-            "Barcode",
-            "Item Number",
-            "Description",
-            "Expiry Date",
-            "Scan Date",
-            "Status",
-            "Action Required",
-        ]
-        if col in missed.columns
-    ]
-
-    return missed[display_cols].sort_values(["Expiry Date", "Description"], kind="stable")
+    return missed.sort_values(["Expiry Date", "Description"], kind="stable")
 
 
+# =========================================================
+# Excel export
+# =========================================================
 def to_excel(df: pd.DataFrame, missed_df: pd.DataFrame | None = None) -> bytes:
     output = io.BytesIO()
 
@@ -252,57 +301,49 @@ def to_excel(df: pd.DataFrame, missed_df: pd.DataFrame | None = None) -> bytes:
             "border": 1,
             "align": "center",
             "valign": "vcenter",
-            "bg_color": "#D9EAF7"
+            "bg_color": "#D9EAF7",
         })
-
         cell_fmt = workbook.add_format({
             "border": 1,
-            "valign": "vcenter"
+            "valign": "vcenter",
         })
-
         center_fmt = workbook.add_format({
             "border": 1,
             "align": "center",
-            "valign": "vcenter"
+            "valign": "vcenter",
         })
-
         date_fmt = workbook.add_format({
             "border": 1,
             "align": "center",
             "valign": "vcenter",
-            "num_format": "dd/mm/yyyy"
+            "num_format": "dd/mm/yyyy",
         })
-
         qty_fmt = workbook.add_format({
             "border": 1,
             "align": "center",
             "valign": "vcenter",
-            "num_format": "0.00"
+            "num_format": "0.00",
         })
-
         barcode_fmt = workbook.add_format({
             "border": 1,
             "align": "center",
             "valign": "vcenter",
-            "num_format": "@"
+            "num_format": "@",
         })
-
         expired_fmt = workbook.add_format({
             "bg_color": "#FFC7CE",
             "font_color": "#9C0006",
-            "border": 1
+            "border": 1,
         })
-
         near_fmt = workbook.add_format({
             "bg_color": "#FFEB9C",
             "font_color": "#9C6500",
-            "border": 1
+            "border": 1,
         })
-
         good_fmt = workbook.add_format({
             "bg_color": "#C6EFCE",
             "font_color": "#006100",
-            "border": 1
+            "border": 1,
         })
 
         for col_num, col_name in enumerate(df.columns):
@@ -324,7 +365,7 @@ def to_excel(df: pd.DataFrame, missed_df: pd.DataFrame | None = None) -> bytes:
                         excel_row,
                         col_num,
                         datetime.combine(pd.to_datetime(value).date(), datetime.min.time()),
-                        date_fmt
+                        date_fmt,
                     )
                 elif col_name == "Qty":
                     worksheet.write_number(excel_row, col_num, float(value), qty_fmt)
@@ -333,7 +374,7 @@ def to_excel(df: pd.DataFrame, missed_df: pd.DataFrame | None = None) -> bytes:
                         excel_row,
                         col_num,
                         f"={expiry_col_excel}{excel_row+1}-TODAY()",
-                        center_fmt
+                        center_fmt,
                     )
                 elif col_name == "Status":
                     worksheet.write_formula(
@@ -376,24 +417,18 @@ def to_excel(df: pd.DataFrame, missed_df: pd.DataFrame | None = None) -> bytes:
         last_row = len(df)
 
         if last_row > 0:
-            worksheet.conditional_format(1, status_col, last_row, status_col, {
-                "type": "text",
-                "criteria": "containing",
-                "value": "Expired",
-                "format": expired_fmt,
-            })
-            worksheet.conditional_format(1, status_col, last_row, status_col, {
-                "type": "text",
-                "criteria": "containing",
-                "value": "Near Expiry",
-                "format": near_fmt,
-            })
-            worksheet.conditional_format(1, status_col, last_row, status_col, {
-                "type": "text",
-                "criteria": "containing",
-                "value": "Good",
-                "format": good_fmt,
-            })
+            worksheet.conditional_format(
+                1, status_col, last_row, status_col,
+                {"type": "text", "criteria": "containing", "value": "Expired", "format": expired_fmt}
+            )
+            worksheet.conditional_format(
+                1, status_col, last_row, status_col,
+                {"type": "text", "criteria": "containing", "value": "Near Expiry", "format": near_fmt}
+            )
+            worksheet.conditional_format(
+                1, status_col, last_row, status_col,
+                {"type": "text", "criteria": "containing", "value": "Good", "format": good_fmt}
+            )
 
         if missed_df is not None and not missed_df.empty:
             missed_df.to_excel(writer, index=False, sheet_name="Missed From Last Scan")
@@ -406,6 +441,7 @@ def to_excel(df: pd.DataFrame, missed_df: pd.DataFrame | None = None) -> bytes:
                 excel_row = row_num + 1
                 for col_num, col_name in enumerate(missed_df.columns):
                     value = row[col_name]
+
                     if col_name == "Barcode":
                         missed_ws.write_string(excel_row, col_num, str(value), barcode_fmt)
                     elif col_name in ["Expiry Date", "Scan Date"]:
@@ -419,15 +455,7 @@ def to_excel(df: pd.DataFrame, missed_df: pd.DataFrame | None = None) -> bytes:
                         missed_ws.write(excel_row, col_num, value, cell_fmt)
 
             for i, col in enumerate(missed_df.columns):
-                if col == "Description":
-                    width = 38
-                elif col in ["Barcode"]:
-                    width = 18
-                elif col in ["Expiry Date", "Scan Date"]:
-                    width = 12
-                else:
-                    width = 18
-                missed_ws.set_column(i, i, width)
+                missed_ws.set_column(i, i, 38 if col == "Description" else 18)
 
             missed_ws.freeze_panes(1, 0)
 
@@ -443,10 +471,6 @@ defaults = {
     "master_loaded": False,
     "master_file_hash": "",
     "master_file_name": "",
-    "previous_loaded": False,
-    "previous_file_hash": "",
-    "previous_file_name": "",
-    "previous_df": pd.DataFrame(),
     "rows": [],
     "save_message": "",
     "form_pd_user": "",
@@ -456,6 +480,8 @@ defaults = {
     "form_expiry_date": date.today(),
     "form_remarks": "",
     "reset_scan_fields": False,
+    "session_id": str(uuid.uuid4()),
+    "db_loaded": False,
 }
 
 for key, value in defaults.items():
@@ -464,7 +490,7 @@ for key, value in defaults.items():
 
 
 # =========================================================
-# Reset fields before widgets render
+# Reset scan fields before widgets render
 # =========================================================
 if st.session_state.reset_scan_fields:
     st.session_state.form_barcode = ""
@@ -487,33 +513,32 @@ st.markdown(
     }
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 st.title("Expiry Scan App")
 
 
 # =========================================================
-# Upload barcode master
+# Barcode master upload
 # =========================================================
-uploaded_file = st.file_uploader(
-    "Upload Barcode Master (CSV / XLSX / XLS format):",
+master_file = st.file_uploader(
+    "Upload Barcode Master",
     type=["csv", "xlsx", "xls"],
-    key="barcode_master_upload"
+    key="barcode_master_upload",
 )
 
-if uploaded_file is not None:
+if master_file is not None:
     try:
-        file_bytes = uploaded_file.getvalue()
+        file_bytes = master_file.getvalue()
         current_hash = file_hash(file_bytes)
 
         if (
             not st.session_state.master_loaded
             or st.session_state.master_file_hash != current_hash
-            or st.session_state.master_file_name != uploaded_file.name
+            or st.session_state.master_file_name != master_file.name
         ):
-            master_df = load_barcode_master_from_bytes(file_bytes, uploaded_file.name)
-
+            master_df = load_barcode_master_from_bytes(file_bytes, master_file.name)
             st.session_state.barcode_lookup = {
                 clean_barcode(row["Barcode"]): (
                     str(row["Item Number"]).strip(),
@@ -523,10 +548,11 @@ if uploaded_file is not None:
             }
             st.session_state.master_loaded = True
             st.session_state.master_file_hash = current_hash
-            st.session_state.master_file_name = uploaded_file.name
+            st.session_state.master_file_name = master_file.name
 
         st.success(
-            f"Loaded barcode master: {st.session_state.master_file_name} ({len(st.session_state.barcode_lookup)} items)"
+            f"Loaded barcode master: {st.session_state.master_file_name} "
+            f"({len(st.session_state.barcode_lookup)} items)"
         )
     except Exception as e:
         st.session_state.master_loaded = False
@@ -535,39 +561,14 @@ if uploaded_file is not None:
 
 
 # =========================================================
-# Upload previous report
+# Load existing session rows from database once
 # =========================================================
-previous_report_file = st.file_uploader(
-    "Upload Last Scan Report (optional):",
-    type=["csv", "xlsx", "xls"],
-    key="previous_report_upload"
-)
-
-if previous_report_file is not None:
+if not st.session_state.db_loaded:
     try:
-        prev_bytes = previous_report_file.getvalue()
-        prev_hash = file_hash(prev_bytes)
-
-        if (
-            not st.session_state.previous_loaded
-            or st.session_state.previous_file_hash != prev_hash
-            or st.session_state.previous_file_name != previous_report_file.name
-        ):
-            prev_df = load_previous_report_from_bytes(prev_bytes, previous_report_file.name)
-            st.session_state.previous_df = prev_df
-            st.session_state.previous_loaded = True
-            st.session_state.previous_file_hash = prev_hash
-            st.session_state.previous_file_name = previous_report_file.name
-
-        active_last_scan_df = get_last_scan_active_items(st.session_state.previous_df)
-        st.success(
-            f"Loaded last scan report: {st.session_state.previous_file_name} "
-            f"({len(active_last_scan_df)} active items from last scan)"
-        )
+        st.session_state.rows = load_rows_from_db(st.session_state.session_id)
+        st.session_state.db_loaded = True
     except Exception as e:
-        st.session_state.previous_loaded = False
-        st.session_state.previous_df = pd.DataFrame()
-        st.error(f"Failed to load last scan report: {e}")
+        st.error(f"Database connection error: {e}")
 
 
 if st.session_state.save_message:
@@ -614,7 +615,7 @@ if submit:
         today = date.today()
         status, days_left, action_required = get_status(expiry_date, today)
 
-        st.session_state.rows.append({
+        row = {
             "PD/User Name": pd_user.strip(),
             "Store / Location": store_location.strip(),
             "Barcode": clean_code,
@@ -627,30 +628,38 @@ if submit:
             "Scan Date": today,
             "Action Required": action_required,
             "Remarks": remarks.strip(),
-        })
+        }
 
-        st.session_state.save_message = f"Saved: {clean_code}"
-        st.session_state.reset_scan_fields = True
-        st.rerun()
+        try:
+            insert_row_to_db(st.session_state.session_id, row)
+            st.session_state.rows.append(row)
+            st.session_state.save_message = f"Saved: {clean_code}"
+            st.session_state.reset_scan_fields = True
+            st.rerun()
+        except Exception as e:
+            st.error(f"Failed to save scan to database: {e}")
 
 
 # =========================================================
-# Current data
+# Current data + missed items
 # =========================================================
 missed_df = pd.DataFrame()
 
-if st.session_state.previous_loaded and not st.session_state.previous_df.empty:
-    missed_df = get_missed_items_from_last_scan(
-        st.session_state.previous_df,
-        st.session_state.rows
-    )
+if st.session_state.form_store_location.strip():
+    try:
+        missed_df = get_missed_items_from_db(
+            st.session_state.form_store_location.strip(),
+            st.session_state.session_id,
+            st.session_state.rows,
+        )
+    except Exception as e:
+        st.warning(f"Could not load last scan comparison: {e}")
 
 if st.session_state.rows:
     df = pd.DataFrame(st.session_state.rows)
     st.dataframe(df, use_container_width=True, hide_index=True)
 
     excel_file = to_excel(df, missed_df)
-
     st.download_button(
         "Download Excel Report",
         data=excel_file,
@@ -675,46 +684,35 @@ else:
         st.warning("No data to export yet.")
 
 
-# =========================================================
-# Missed items from last scan
-# =========================================================
-if st.session_state.previous_loaded:
+if st.session_state.form_store_location.strip():
     st.markdown("---")
     st.subheader("Items From Last Scan Still Not Expired")
 
     if missed_df.empty:
         st.success("No missed active items from last scan.")
     else:
-        st.warning(
-            "These items were in the last scan, are still not expired, and have not been scanned today."
-        )
+        st.warning("These items were in the last scan, are still not expired, and have not been scanned today.")
         st.dataframe(missed_df, use_container_width=True, hide_index=True)
 
 
 # =========================================================
-# Clear buttons
+# Bottom buttons
 # =========================================================
 st.markdown("---")
-
-col_a, col_b, col_c = st.columns(3)
+col_a, col_b = st.columns(2)
 
 with col_a:
     if st.button("Clear Saved Lines", use_container_width=True):
-        st.session_state.rows = []
-        st.rerun()
+        try:
+            delete_session_rows(st.session_state.session_id)
+            st.session_state.rows = []
+            st.rerun()
+        except Exception as e:
+            st.error(f"Failed to clear saved lines: {e}")
 
 with col_b:
-    if st.button("Clear Barcode Master", use_container_width=True):
-        st.session_state.barcode_lookup = {}
-        st.session_state.master_loaded = False
-        st.session_state.master_file_hash = ""
-        st.session_state.master_file_name = ""
-        st.rerun()
-
-with col_c:
-    if st.button("Clear Last Scan Report", use_container_width=True):
-        st.session_state.previous_loaded = False
-        st.session_state.previous_file_hash = ""
-        st.session_state.previous_file_name = ""
-        st.session_state.previous_df = pd.DataFrame()
+    if st.button("Start New Session", use_container_width=True):
+        st.session_state.session_id = str(uuid.uuid4())
+        st.session_state.rows = []
+        st.session_state.db_loaded = False
         st.rerun()
