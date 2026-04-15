@@ -31,14 +31,6 @@ def find_column(columns, candidates):
 
 
 def clean_barcode(value) -> str:
-    """
-    Convert barcode values safely to text.
-    Handles:
-    - numeric Excel values
-    - scientific notation
-    - trailing .0
-    - spaces / tabs / line breaks
-    """
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return ""
 
@@ -47,13 +39,9 @@ def clean_barcode(value) -> str:
         return ""
 
     s = s.replace("\n", "").replace("\r", "").replace("\t", "").strip()
-
-    # Remove spaces inside barcode
     s = re.sub(r"\s+", "", s)
 
-    # If it looks numeric/scientific, convert safely
     try:
-        # Example: 8.50003E+11
         if re.fullmatch(r"[-+]?\d+(\.\d+)?([eE][-+]?\d+)?", s):
             num = float(s)
             if num.is_integer():
@@ -62,7 +50,6 @@ def clean_barcode(value) -> str:
     except Exception:
         pass
 
-    # Remove trailing .0 if present
     if s.endswith(".0"):
         s = s[:-2]
 
@@ -297,8 +284,6 @@ def add_scan_row():
 
 def barcode_changed():
     lookup_current_barcode()
-    if st.session_state.get("auto_submit_on_scan", True):
-        add_scan_row()
 
 
 def make_summary(raw_df: pd.DataFrame) -> pd.DataFrame:
@@ -342,9 +327,6 @@ def to_excel(raw_df: pd.DataFrame, summary_df: pd.DataFrame) -> bytes:
         raw_ws = writer.sheets["Raw Report"]
         summary_ws = writer.sheets["Summary"]
 
-        # -------------------------
-        # Formats
-        # -------------------------
         title_fmt = workbook.add_format(
             {
                 "bold": True,
@@ -418,9 +400,6 @@ def to_excel(raw_df: pd.DataFrame, summary_df: pd.DataFrame) -> bytes:
             {"bg_color": "#C6EFCE", "font_color": "#006100", "border": 1}
         )
 
-        # -------------------------
-        # Raw Report styling
-        # -------------------------
         raw_cols = list(raw_df.columns)
         raw_row_count = len(raw_df)
 
@@ -437,9 +416,8 @@ def to_excel(raw_df: pd.DataFrame, summary_df: pd.DataFrame) -> bytes:
         for col_num, col_name in enumerate(raw_cols):
             raw_ws.write(1, col_num, col_name, header_fmt)
 
-        # rewrite body with formats
         for row_num, row in raw_df.iterrows():
-            excel_row = row_num + 2  # because title at row 1, header at row 2 in Excel
+            excel_row = row_num + 2
 
             for col_num, col_name in enumerate(raw_cols):
                 value = row[col_name]
@@ -456,7 +434,6 @@ def to_excel(raw_df: pd.DataFrame, summary_df: pd.DataFrame) -> bytes:
                 elif col_name == "Qty":
                     raw_ws.write_number(excel_row, col_num, float(value), qty_fmt)
                 elif col_name == "Days Left":
-                    # Dynamic Excel formula based on Expiry Date
                     expiry_col_letter = chr(65 + raw_cols.index("Expiry Date"))
                     raw_ws.write_formula(
                         excel_row,
@@ -493,21 +470,20 @@ def to_excel(raw_df: pd.DataFrame, summary_df: pd.DataFrame) -> bytes:
         raw_ws.freeze_panes(2, 0)
         raw_ws.autofilter(1, 0, raw_row_count + 1, len(raw_cols) - 1)
 
-        # widths
         for col_num, col_name in enumerate(raw_cols):
-            if col_name in ["Barcode"]:
+            if col_name == "Barcode":
                 width = 18
             elif col_name in ["Expiry Date", "Scan Date"]:
                 width = 13
-            elif col_name in ["Status"]:
+            elif col_name == "Status":
                 width = 14
             elif col_name in ["Days Left", "Qty"]:
                 width = 10
-            elif col_name in ["Action Required"]:
+            elif col_name == "Action Required":
                 width = 24
-            elif col_name in ["Description"]:
+            elif col_name == "Description":
                 width = 40
-            elif col_name in ["Remarks"]:
+            elif col_name == "Remarks":
                 width = 24
             else:
                 width = max(14, min(24, len(col_name) + 4))
@@ -555,7 +531,6 @@ def to_excel(raw_df: pd.DataFrame, summary_df: pd.DataFrame) -> bytes:
                 },
             )
 
-        # full-row highlighting
         if raw_row_count > 0 and "Status" in raw_cols:
             status_letter = chr(65 + raw_cols.index("Status"))
             raw_ws.conditional_format(
@@ -584,9 +559,6 @@ def to_excel(raw_df: pd.DataFrame, summary_df: pd.DataFrame) -> bytes:
         raw_ws.repeat_rows(0, 1)
         raw_ws.fit_to_pages(1, 0)
 
-        # -------------------------
-        # Summary styling
-        # -------------------------
         summary_cols = list(summary_df.columns)
         summary_row_count = len(summary_df)
 
@@ -623,13 +595,13 @@ def to_excel(raw_df: pd.DataFrame, summary_df: pd.DataFrame) -> bytes:
         summary_ws.autofilter(1, 0, summary_row_count + 1, len(summary_cols) - 1)
 
         for col_num, col_name in enumerate(summary_cols):
-            if col_name in ["Description"]:
+            if col_name == "Description":
                 width = 40
             elif "Expiry" in col_name:
                 width = 13
-            elif col_name in ["Status"]:
+            elif col_name == "Status":
                 width = 14
-            elif col_name in ["Action Required"]:
+            elif col_name == "Action Required":
                 width = 24
             else:
                 width = max(14, min(22, len(col_name) + 4))
@@ -661,7 +633,7 @@ defaults = {
     "fixed_user": "",
     "fixed_store": "",
     "near_expiry_days": 30,
-    "auto_submit_on_scan": True,
+    "auto_submit_on_scan": False,
     "last_lookup_item": "",
     "last_lookup_desc": "",
     "focus_barcode": True,
@@ -681,7 +653,6 @@ with st.sidebar:
     st.text_input("PD/User Name", key="fixed_user", placeholder="Enter user name")
     st.text_input("Store / Location", key="fixed_store", placeholder="Enter store/location")
     st.number_input("Near Expiry Days", min_value=1, max_value=365, key="near_expiry_days")
-    st.toggle("Auto submit on scan", key="auto_submit_on_scan")
 
     st.markdown("---")
     st.subheader("Barcode Master")
@@ -754,7 +725,7 @@ with col_c:
 st.text_input("Remarks", key="remarks_input", placeholder="Optional remarks")
 
 lookup_barcode = clean_barcode(st.session_state.get("barcode_input", ""))
-if lookup_barcode and not st.session_state.get("auto_submit_on_scan", True):
+if lookup_barcode:
     lookup_current_barcode()
 
 info1, info2, info3, info4 = st.columns(4)
@@ -771,9 +742,8 @@ if st.session_state.last_lookup_item or st.session_state.last_lookup_desc:
     with c2:
         st.info(f"**Description:** {st.session_state.last_lookup_desc or '-'}")
 
-if not st.session_state.auto_submit_on_scan:
-    if st.button("Save Scan", use_container_width=True):
-        add_scan_row()
+if st.button("Save Scan", use_container_width=True):
+    add_scan_row()
 
 if st.session_state.focus_barcode:
     focus_barcode_input()
