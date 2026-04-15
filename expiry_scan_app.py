@@ -1,11 +1,12 @@
 import io
 import re
+import hashlib
 from datetime import date, datetime
 
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="Store Stock Take App", layout="centered")
+st.set_page_config(page_title="Expiry Scan App", layout="centered")
 
 
 # =========================================================
@@ -59,7 +60,7 @@ def prepare_barcode_master(df: pd.DataFrame) -> pd.DataFrame:
     )
     item_col = find_column(
         df.columns,
-        ["item no", "item number", "item", "item_no", "no"],
+        ["item no", "item number", "item", "item_no", "no", "item code"],
     )
     desc_col = find_column(
         df.columns,
@@ -79,16 +80,35 @@ def prepare_barcode_master(df: pd.DataFrame) -> pd.DataFrame:
 
     out = df[[barcode_col, item_col, desc_col]].copy()
     out.columns = ["Barcode", "Item Number", "Description"]
+
     out["Barcode"] = out["Barcode"].apply(clean_barcode)
     out["Item Number"] = out["Item Number"].fillna("").astype(str).str.strip()
     out["Description"] = out["Description"].fillna("").astype(str).str.strip()
-    out = out[out["Barcode"] != ""].drop_duplicates(subset=["Barcode"], keep="first")
 
+    out = out[out["Barcode"] != ""]
+    out = out.drop_duplicates(subset=["Barcode"], keep="first")
     return out
 
 
-def get_status(expiry_date, today):
-    days_left = (expiry_date - today).days
+def file_hash(file_bytes: bytes) -> str:
+    return hashlib.md5(file_bytes).hexdigest()
+
+
+@st.cache_data(show_spinner=False)
+def load_barcode_master_from_bytes(file_bytes: bytes, file_name: str) -> pd.DataFrame:
+    if file_name.lower().endswith(".csv"):
+        try:
+            df = pd.read_csv(io.BytesIO(file_bytes), dtype=str, low_memory=False)
+        except UnicodeDecodeError:
+            df = pd.read_csv(io.BytesIO(file_bytes), dtype=str, encoding="latin1", low_memory=False)
+    else:
+        df = pd.read_excel(io.BytesIO(file_bytes), dtype=str)
+
+    return prepare_barcode_master(df)
+
+
+def get_status(expiry_date_value, today_value):
+    days_left = (expiry_date_value - today_value).days
     if days_left < 0:
         return "Expired", days_left, "Remove immediately"
     if days_left <= 3:
@@ -99,7 +119,12 @@ def get_status(expiry_date, today):
 def to_excel(df: pd.DataFrame) -> bytes:
     output = io.BytesIO()
 
-    with pd.ExcelWriter(output, engine="xlsxwriter", date_format="dd/mm/yyyy", datetime_format="dd/mm/yyyy") as writer:
+    with pd.ExcelWriter(
+        output,
+        engine="xlsxwriter",
+        date_format="dd/mm/yyyy",
+        datetime_format="dd/mm/yyyy",
+    ) as writer:
         df.to_excel(writer, index=False, sheet_name="Expiry Report")
 
         workbook = writer.book
@@ -131,6 +156,13 @@ def to_excel(df: pd.DataFrame) -> bytes:
             "num_format": "dd/mm/yyyy"
         })
 
+        qty_fmt = workbook.add_format({
+            "border": 1,
+            "align": "center",
+            "valign": "vcenter",
+            "num_format": "0.00"
+        })
+
         barcode_fmt = workbook.add_format({
             "border": 1,
             "align": "center",
@@ -159,8 +191,12 @@ def to_excel(df: pd.DataFrame) -> bytes:
         for col_num, col_name in enumerate(df.columns):
             worksheet.write(0, col_num, col_name, header_fmt)
 
+        expiry_col_excel = "G"
+        status_col_excel = "H"
+
         for row_num, row in df.iterrows():
             excel_row = row_num + 1
+
             for col_num, col_name in enumerate(df.columns):
                 value = row[col_name]
 
@@ -173,20 +209,27 @@ def to_excel(df: pd.DataFrame) -> bytes:
                         datetime.combine(pd.to_datetime(value).date(), datetime.min.time()),
                         date_fmt
                     )
+                elif col_name == "Qty":
+                    worksheet.write_number(excel_row, col_num, float(value), qty_fmt)
                 elif col_name == "Days Left":
-                    worksheet.write_formula(excel_row, col_num, f"=G{excel_row+1}-TODAY()", center_fmt)
+                    worksheet.write_formula(
+                        excel_row,
+                        col_num,
+                        f"={expiry_col_excel}{excel_row+1}-TODAY()",
+                        center_fmt
+                    )
                 elif col_name == "Status":
                     worksheet.write_formula(
                         excel_row,
                         col_num,
-                        f'=IF(G{excel_row+1}<TODAY(),"Expired",IF(G{excel_row+1}-TODAY()<=3,"Near Expiry","OK"))',
+                        f'=IF({expiry_col_excel}{excel_row+1}<TODAY(),"Expired",IF({expiry_col_excel}{excel_row+1}-TODAY()<=3,"Near Expiry","OK"))',
                         center_fmt,
                     )
                 elif col_name == "Action Required":
                     worksheet.write_formula(
                         excel_row,
                         col_num,
-                        f'=IF(H{excel_row+1}="Expired","Remove immediately",IF(H{excel_row+1}="Near Expiry","Check / markdown","No action"))',
+                        f'=IF({status_col_excel}{excel_row+1}="Expired","Remove immediately",IF({status_col_excel}{excel_row+1}="Near Expiry","Check / markdown","No action"))',
                         cell_fmt,
                     )
                 else:
@@ -215,24 +258,25 @@ def to_excel(df: pd.DataFrame) -> bytes:
         status_col = list(df.columns).index("Status")
         last_row = len(df)
 
-        worksheet.conditional_format(1, status_col, last_row, status_col, {
-            "type": "text",
-            "criteria": "containing",
-            "value": "Expired",
-            "format": expired_fmt,
-        })
-        worksheet.conditional_format(1, status_col, last_row, status_col, {
-            "type": "text",
-            "criteria": "containing",
-            "value": "Near Expiry",
-            "format": near_fmt,
-        })
-        worksheet.conditional_format(1, status_col, last_row, status_col, {
-            "type": "text",
-            "criteria": "containing",
-            "value": "OK",
-            "format": ok_fmt,
-        })
+        if last_row > 0:
+            worksheet.conditional_format(1, status_col, last_row, status_col, {
+                "type": "text",
+                "criteria": "containing",
+                "value": "Expired",
+                "format": expired_fmt,
+            })
+            worksheet.conditional_format(1, status_col, last_row, status_col, {
+                "type": "text",
+                "criteria": "containing",
+                "value": "Near Expiry",
+                "format": near_fmt,
+            })
+            worksheet.conditional_format(1, status_col, last_row, status_col, {
+                "type": "text",
+                "criteria": "containing",
+                "value": "OK",
+                "format": ok_fmt,
+            })
 
     output.seek(0)
     return output.getvalue()
@@ -247,22 +291,46 @@ if "barcode_lookup" not in st.session_state:
 if "master_loaded" not in st.session_state:
     st.session_state.master_loaded = False
 
+if "master_file_hash" not in st.session_state:
+    st.session_state.master_file_hash = ""
+
+if "master_file_name" not in st.session_state:
+    st.session_state.master_file_name = ""
+
 if "rows" not in st.session_state:
     st.session_state.rows = []
 
-if "save_clicked" not in st.session_state:
-    st.session_state.save_clicked = False
+if "save_message" not in st.session_state:
+    st.session_state.save_message = ""
+
+if "form_pd_user" not in st.session_state:
+    st.session_state.form_pd_user = ""
+
+if "form_store_location" not in st.session_state:
+    st.session_state.form_store_location = ""
+
+if "form_barcode" not in st.session_state:
+    st.session_state.form_barcode = ""
+
+if "form_qty" not in st.session_state:
+    st.session_state.form_qty = 1.0
+
+if "form_expiry_date" not in st.session_state:
+    st.session_state.form_expiry_date = date.today()
+
+if "form_remarks" not in st.session_state:
+    st.session_state.form_remarks = ""
 
 
 # =========================================================
-# UI
+# Page styling
 # =========================================================
 st.markdown(
     """
     <style>
     .block-container {
-        max-width: 800px;
-        padding-top: 2rem;
+        max-width: 820px;
+        padding-top: 1.5rem;
         padding-bottom: 2rem;
     }
     </style>
@@ -270,45 +338,69 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.title("Store Stock Take App")
+st.title("Expiry Scan App")
 
-uploaded_file = st.file_uploader("Upload Barcode Master (CSV format):", type=["csv", "xlsx", "xls"])
-
-pd_user = st.text_input("PD/User Name:", placeholder="Enter filename")
-store_location = st.text_input("Store / Location:", placeholder="Enter store/location")
-barcode = st.text_input("Product Barcode:")
-qty = st.number_input("Quantity:", min_value=1.0, step=1.0, value=1.0)
-expiry_date = st.date_input("Expiry Date:", value=date.today())
-remarks = st.text_input("Remarks:", placeholder="Optional remarks")
+# =========================================================
+# Load barcode master only when changed
+# =========================================================
+uploaded_file = st.file_uploader(
+    "Upload Barcode Master (CSV / XLSX / XLS format):",
+    type=["csv", "xlsx", "xls"]
+)
 
 if uploaded_file is not None:
     try:
-        if uploaded_file.name.lower().endswith(".csv"):
-            master_df = pd.read_csv(uploaded_file, dtype=str)
-        else:
-            master_df = pd.read_excel(uploaded_file, dtype=str)
+        file_bytes = uploaded_file.getvalue()
+        current_hash = file_hash(file_bytes)
 
-        master_df = prepare_barcode_master(master_df)
-        st.session_state.barcode_lookup = {
-            clean_barcode(row["Barcode"]): (
-                str(row["Item Number"]).strip(),
-                str(row["Description"]).strip(),
-            )
-            for _, row in master_df.iterrows()
-        }
-        st.session_state.master_loaded = True
+        if (
+            not st.session_state.master_loaded
+            or st.session_state.master_file_hash != current_hash
+            or st.session_state.master_file_name != uploaded_file.name
+        ):
+            master_df = load_barcode_master_from_bytes(file_bytes, uploaded_file.name)
+
+            st.session_state.barcode_lookup = {
+                clean_barcode(row["Barcode"]): (
+                    str(row["Item Number"]).strip(),
+                    str(row["Description"]).strip(),
+                )
+                for _, row in master_df.iterrows()
+            }
+            st.session_state.master_loaded = True
+            st.session_state.master_file_hash = current_hash
+            st.session_state.master_file_name = uploaded_file.name
+
+        st.success(f"Loaded barcode master: {st.session_state.master_file_name} ({len(st.session_state.barcode_lookup)} items)")
     except Exception as e:
-        st.error(f"Failed to load barcode master: {e}")
         st.session_state.master_loaded = False
+        st.session_state.barcode_lookup = {}
+        st.error(f"Failed to load barcode master: {e}")
 
-col1, col2 = st.columns(2)
+if st.session_state.save_message:
+    st.success(st.session_state.save_message)
+    st.session_state.save_message = ""
 
-with col1:
-    submit = st.button("Submit", use_container_width=True)
+# =========================================================
+# Input form
+# =========================================================
+with st.form("expiry_form", clear_on_submit=False):
+    pd_user = st.text_input("PD/User Name:", key="form_pd_user")
+    store_location = st.text_input("Store / Location:", key="form_store_location")
+    barcode = st.text_input("Product Barcode:", key="form_barcode")
+    qty = st.number_input("Quantity:", min_value=1.0, step=1.0, key="form_qty")
+    expiry_date = st.date_input("Expiry Date:", key="form_expiry_date")
+    remarks = st.text_input("Remarks:", key="form_remarks", placeholder="Optional remarks")
 
-with col2:
-    export = st.button("Export", use_container_width=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        submit = st.form_submit_button("Submit", use_container_width=True)
+    with col2:
+        export_inside_form = st.form_submit_button("Export", use_container_width=True)
 
+# =========================================================
+# Submit logic
+# =========================================================
 if submit:
     if not st.session_state.master_loaded:
         st.warning("Please upload barcode master first.")
@@ -342,18 +434,58 @@ if submit:
             "Remarks": remarks.strip(),
         })
 
-        st.success(f"Saved: {clean_code}")
+        # keep user and store, clear scan fields only
+        st.session_state.form_barcode = ""
+        st.session_state.form_qty = 1.0
+        st.session_state.form_expiry_date = date.today()
+        st.session_state.form_remarks = ""
+        st.session_state.save_message = f"Saved: {clean_code}"
+        st.rerun()
 
+# =========================================================
+# Table + export
+# =========================================================
 if st.session_state.rows:
     df = pd.DataFrame(st.session_state.rows)
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-    if export:
-        excel_file = to_excel(df)
-        st.download_button(
-            "Download Excel Report",
-            data=excel_file,
-            file_name=f"expiry_report_{date.today().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
+    excel_file = to_excel(df)
+
+    st.download_button(
+        "Download Excel Report",
+        data=excel_file,
+        file_name=f"expiry_report_{date.today().strftime('%Y%m%d')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+
+    csv_data = df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "Download CSV",
+        data=csv_data,
+        file_name=f"expiry_report_{date.today().strftime('%Y%m%d')}.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+    if export_inside_form:
+        st.info("Use the Download Excel Report button below.")
+else:
+    if export_inside_form:
+        st.warning("No data to export yet.")
+
+st.markdown("---")
+
+col_a, col_b = st.columns(2)
+with col_a:
+    if st.button("Clear Saved Lines", use_container_width=True):
+        st.session_state.rows = []
+        st.rerun()
+
+with col_b:
+    if st.button("Clear Barcode Master", use_container_width=True):
+        st.session_state.barcode_lookup = {}
+        st.session_state.master_loaded = False
+        st.session_state.master_file_hash = ""
+        st.session_state.master_file_name = ""
+        st.rerun()
