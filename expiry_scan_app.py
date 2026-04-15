@@ -285,41 +285,36 @@ def to_excel(df: pd.DataFrame) -> bytes:
 # =========================================================
 # Session state
 # =========================================================
-if "barcode_lookup" not in st.session_state:
-    st.session_state.barcode_lookup = {}
+defaults = {
+    "barcode_lookup": {},
+    "master_loaded": False,
+    "master_file_hash": "",
+    "master_file_name": "",
+    "rows": [],
+    "save_message": "",
+    "form_pd_user": "",
+    "form_store_location": "",
+    "form_barcode": "",
+    "form_qty": 1.0,
+    "form_expiry_date": date.today(),
+    "form_remarks": "",
+    "reset_scan_fields": False,
+}
 
-if "master_loaded" not in st.session_state:
-    st.session_state.master_loaded = False
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
-if "master_file_hash" not in st.session_state:
-    st.session_state.master_file_hash = ""
 
-if "master_file_name" not in st.session_state:
-    st.session_state.master_file_name = ""
-
-if "rows" not in st.session_state:
-    st.session_state.rows = []
-
-if "save_message" not in st.session_state:
-    st.session_state.save_message = ""
-
-if "form_pd_user" not in st.session_state:
-    st.session_state.form_pd_user = ""
-
-if "form_store_location" not in st.session_state:
-    st.session_state.form_store_location = ""
-
-if "form_barcode" not in st.session_state:
+# =========================================================
+# Reset fields BEFORE widgets render
+# =========================================================
+if st.session_state.reset_scan_fields:
     st.session_state.form_barcode = ""
-
-if "form_qty" not in st.session_state:
     st.session_state.form_qty = 1.0
-
-if "form_expiry_date" not in st.session_state:
     st.session_state.form_expiry_date = date.today()
-
-if "form_remarks" not in st.session_state:
     st.session_state.form_remarks = ""
+    st.session_state.reset_scan_fields = False
 
 
 # =========================================================
@@ -340,8 +335,9 @@ st.markdown(
 
 st.title("Expiry Scan App")
 
+
 # =========================================================
-# Load barcode master only when changed
+# Load barcode master
 # =========================================================
 uploaded_file = st.file_uploader(
     "Upload Barcode Master (CSV / XLSX / XLS format):",
@@ -371,7 +367,9 @@ if uploaded_file is not None:
             st.session_state.master_file_hash = current_hash
             st.session_state.master_file_name = uploaded_file.name
 
-        st.success(f"Loaded barcode master: {st.session_state.master_file_name} ({len(st.session_state.barcode_lookup)} items)")
+        st.success(
+            f"Loaded barcode master: {st.session_state.master_file_name} ({len(st.session_state.barcode_lookup)} items)"
+        )
     except Exception as e:
         st.session_state.master_loaded = False
         st.session_state.barcode_lookup = {}
@@ -381,8 +379,9 @@ if st.session_state.save_message:
     st.success(st.session_state.save_message)
     st.session_state.save_message = ""
 
+
 # =========================================================
-# Input form
+# Form
 # =========================================================
 with st.form("expiry_form", clear_on_submit=False):
     pd_user = st.text_input("PD/User Name:", key="form_pd_user")
@@ -397,6 +396,7 @@ with st.form("expiry_form", clear_on_submit=False):
         submit = st.form_submit_button("Submit", use_container_width=True)
     with col2:
         export_inside_form = st.form_submit_button("Export", use_container_width=True)
+
 
 # =========================================================
 # Submit logic
@@ -434,13 +434,10 @@ if submit:
             "Remarks": remarks.strip(),
         })
 
-        # keep user and store, clear scan fields only
-        st.session_state.form_barcode = ""
-        st.session_state.form_qty = 1.0
-        st.session_state.form_expiry_date = date.today()
-        st.session_state.form_remarks = ""
         st.session_state.save_message = f"Saved: {clean_code}"
+        st.session_state.reset_scan_fields = True
         st.rerun()
+
 
 # =========================================================
 # Table + export
