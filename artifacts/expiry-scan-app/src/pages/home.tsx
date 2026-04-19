@@ -67,9 +67,9 @@ function calculateStatusAndDays(expiryDateStr: string, scanDateStr: string) {
   let status: typeof ExpiryScanStatus[keyof typeof ExpiryScanStatus] = ExpiryScanStatus.OK;
   if (days < 0) {
     status = ExpiryScanStatus.Expired;
-  } else if (days <= 30) {
+  } else if (days <= 2) {
     status = ExpiryScanStatus.Urgent;
-  } else if (days <= 90) {
+  } else if (days <= 7) {
     status = ExpiryScanStatus.Near_Expiry;
   }
   
@@ -81,6 +81,7 @@ export default function Home() {
   const queryClient = useQueryClient();
   const [isSetupComplete, setIsSetupComplete] = useState(false);
   const [setupData, setSetupData] = useState<{pdUserName: string, storeLocation: string, scanDate: string} | null>(null);
+  const [newSessionId, setNewSessionId] = useState<string | null>(null);
   const [showNonExpiredOnly, setShowNonExpiredOnly] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
@@ -135,7 +136,7 @@ export default function Home() {
     }
   );
 
-  const sessionId = latestSession?.sessionId;
+  const sessionId = latestSession?.sessionId ?? newSessionId;
 
   const { data: scans = [], isLoading: isLoadingScans } = useListExpiryScans(sessionId || "", {
     query: {
@@ -200,6 +201,9 @@ export default function Home() {
 
   const onSetupSubmit = (values: z.infer<typeof setupSchema>) => {
     setSetupData(values);
+    setNewSessionId(
+      `${values.storeLocation}_${values.pdUserName}_${values.scanDate}_${crypto.randomUUID().slice(0, 8)}`,
+    );
     setIsSetupComplete(true);
   };
 
