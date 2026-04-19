@@ -6,4 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./expiryScan";
+export * from "./expiryScanStatus";
+export * from "./expirySessionSummary";
+export * from "./getLatestExpirySessionParams";
 export * from "./healthStatus";
+export * from "./latestSessionResponse";
+export * from "./newExpiryScan";

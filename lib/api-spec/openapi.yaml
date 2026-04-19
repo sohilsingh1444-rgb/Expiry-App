@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: expiryScans
+    description: Expiry scan operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,105 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /expiry-sessions/latest:
+    get:
+      operationId: getLatestExpirySession
+      tags: [expiryScans]
+      summary: Get latest scan session for a context
+      parameters:
+        - in: query
+          name: pdUserName
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: storeLocation
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: scanDate
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Latest session response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LatestSessionResponse"
+  /expiry-sessions/{sessionId}/scans:
+    get:
+      operationId: listExpiryScans
+      tags: [expiryScans]
+      summary: List scans for a session
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Scan rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExpiryScan"
+  /expiry-sessions/{sessionId}/summary:
+    get:
+      operationId: getExpirySessionSummary
+      tags: [expiryScans]
+      summary: Get summary metrics for a session
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpirySessionSummary"
+  /expiry-scans:
+    post:
+      operationId: createExpiryScan
+      tags: [expiryScans]
+      summary: Create an expiry scan row
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewExpiryScan"
+      responses:
+        "201":
+          description: Created scan row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpiryScan"
+  /expiry-scans/{id}:
+    delete:
+      operationId: deleteExpiryScan
+      tags: [expiryScans]
+      summary: Delete a scan row
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
 components:
   schemas:
     HealthStatus:
@@ -33,4 +134,123 @@ components:
           type: string
       required:
         - status
-
+    LatestSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          nullable: true
+      required:
+        - sessionId
+    ExpiryScan:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: string
+        pdUserName:
+          type: string
+        storeLocation:
+          type: string
+        barcode:
+          type: string
+        itemNumber:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        qty:
+          type: number
+        expiryDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [Expired, Urgent, Near Expiry, OK]
+        daysLeft:
+          type: integer
+        scanDate:
+          type: string
+          format: date
+        actionRequired:
+          type: string
+          nullable: true
+        remarks:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - sessionId
+        - pdUserName
+        - storeLocation
+        - barcode
+        - qty
+        - expiryDate
+        - status
+        - daysLeft
+        - scanDate
+        - createdAt
+    NewExpiryScan:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        pdUserName:
+          type: string
+        storeLocation:
+          type: string
+        barcode:
+          type: string
+        itemNumber:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        qty:
+          type: number
+          minimum: 0.01
+        expiryDate:
+          type: string
+          format: date
+        scanDate:
+          type: string
+          format: date
+        remarks:
+          type: string
+          nullable: true
+      required:
+        - sessionId
+        - pdUserName
+        - storeLocation
+        - barcode
+        - qty
+        - expiryDate
+        - scanDate
+    ExpirySessionSummary:
+      type: object
+      properties:
+        scans:
+          type: integer
+        activeItems:
+          type: integer
+        expiredItems:
+          type: integer
+        totalQty:
+          type: number
+        urgentItems:
+          type: integer
+        nearExpiryItems:
+          type: integer
+      required:
+        - scans
+        - activeItems
+        - expiredItems
+        - totalQty
+        - urgentItems
+        - nearExpiryItems

@@ -8,3 +8,64 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface LatestSessionResponse {
+  sessionId: string | null;
+}
+
+export type ExpiryScanStatus =
+  (typeof ExpiryScanStatus)[keyof typeof ExpiryScanStatus];
+
+export const ExpiryScanStatus = {
+  Expired: "Expired",
+  Urgent: "Urgent",
+  Near_Expiry: "Near Expiry",
+  OK: "OK",
+} as const;
+
+export interface ExpiryScan {
+  id: number;
+  sessionId: string;
+  pdUserName: string;
+  storeLocation: string;
+  barcode: string;
+  itemNumber?: string | null;
+  description?: string | null;
+  qty: number;
+  expiryDate: string;
+  status: ExpiryScanStatus;
+  daysLeft: number;
+  scanDate: string;
+  actionRequired?: string | null;
+  remarks?: string | null;
+  createdAt: string;
+}
+
+export interface NewExpiryScan {
+  sessionId: string;
+  pdUserName: string;
+  storeLocation: string;
+  barcode: string;
+  itemNumber?: string | null;
+  description?: string | null;
+  /** @minimum 0.01 */
+  qty: number;
+  expiryDate: string;
+  scanDate: string;
+  remarks?: string | null;
+}
+
+export interface ExpirySessionSummary {
+  scans: number;
+  activeItems: number;
+  expiredItems: number;
+  totalQty: number;
+  urgentItems: number;
+  nearExpiryItems: number;
+}
+
+export type GetLatestExpirySessionParams = {
+  pdUserName: string;
+  storeLocation: string;
+  scanDate: string;
+};

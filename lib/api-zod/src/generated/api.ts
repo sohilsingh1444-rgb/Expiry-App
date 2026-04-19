@@ -14,3 +14,83 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * @summary Get latest scan session for a context
+ */
+export const GetLatestExpirySessionQueryParams = zod.object({
+  pdUserName: zod.coerce.string(),
+  storeLocation: zod.coerce.string(),
+  scanDate: zod.date(),
+});
+
+export const GetLatestExpirySessionResponse = zod.object({
+  sessionId: zod.string().nullable(),
+});
+
+/**
+ * @summary List scans for a session
+ */
+export const ListExpiryScansParams = zod.object({
+  sessionId: zod.coerce.string(),
+});
+
+export const ListExpiryScansResponseItem = zod.object({
+  id: zod.number(),
+  sessionId: zod.string(),
+  pdUserName: zod.string(),
+  storeLocation: zod.string(),
+  barcode: zod.string(),
+  itemNumber: zod.string().nullish(),
+  description: zod.string().nullish(),
+  qty: zod.number(),
+  expiryDate: zod.coerce.date(),
+  status: zod.enum(["Expired", "Urgent", "Near Expiry", "OK"]),
+  daysLeft: zod.number(),
+  scanDate: zod.coerce.date(),
+  actionRequired: zod.string().nullish(),
+  remarks: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const ListExpiryScansResponse = zod.array(ListExpiryScansResponseItem);
+
+/**
+ * @summary Get summary metrics for a session
+ */
+export const GetExpirySessionSummaryParams = zod.object({
+  sessionId: zod.coerce.string(),
+});
+
+export const GetExpirySessionSummaryResponse = zod.object({
+  scans: zod.number(),
+  activeItems: zod.number(),
+  expiredItems: zod.number(),
+  totalQty: zod.number(),
+  urgentItems: zod.number(),
+  nearExpiryItems: zod.number(),
+});
+
+/**
+ * @summary Create an expiry scan row
+ */
+export const createExpiryScanBodyQtyMin = 0.01;
+
+export const CreateExpiryScanBody = zod.object({
+  sessionId: zod.string(),
+  pdUserName: zod.string(),
+  storeLocation: zod.string(),
+  barcode: zod.string(),
+  itemNumber: zod.string().nullish(),
+  description: zod.string().nullish(),
+  qty: zod.number().min(createExpiryScanBodyQtyMin),
+  expiryDate: zod.coerce.date(),
+  scanDate: zod.coerce.date(),
+  remarks: zod.string().nullish(),
+});
+
+/**
+ * @summary Delete a scan row
+ */
+export const DeleteExpiryScanParams = zod.object({
+  id: zod.coerce.number(),
+});

@@ -5,18 +5,28 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  ExpiryScan,
+  ExpirySessionSummary,
+  GetLatestExpirySessionParams,
+  HealthStatus,
+  LatestSessionResponse,
+  NewExpiryScan,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -99,3 +109,459 @@ export function useHealthCheck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get latest scan session for a context
+ */
+export const getGetLatestExpirySessionUrl = (
+  params: GetLatestExpirySessionParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/expiry-sessions/latest?${stringifiedParams}`
+    : `/api/expiry-sessions/latest`;
+};
+
+export const getLatestExpirySession = async (
+  params: GetLatestExpirySessionParams,
+  options?: RequestInit,
+): Promise<LatestSessionResponse> => {
+  return customFetch<LatestSessionResponse>(
+    getGetLatestExpirySessionUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetLatestExpirySessionQueryKey = (
+  params?: GetLatestExpirySessionParams,
+) => {
+  return [`/api/expiry-sessions/latest`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetLatestExpirySessionQueryOptions = <
+  TData = Awaited<ReturnType<typeof getLatestExpirySession>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetLatestExpirySessionParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLatestExpirySession>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetLatestExpirySessionQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getLatestExpirySession>>
+  > = ({ signal }) =>
+    getLatestExpirySession(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getLatestExpirySession>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetLatestExpirySessionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getLatestExpirySession>>
+>;
+export type GetLatestExpirySessionQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get latest scan session for a context
+ */
+
+export function useGetLatestExpirySession<
+  TData = Awaited<ReturnType<typeof getLatestExpirySession>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetLatestExpirySessionParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLatestExpirySession>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetLatestExpirySessionQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List scans for a session
+ */
+export const getListExpiryScansUrl = (sessionId: string) => {
+  return `/api/expiry-sessions/${sessionId}/scans`;
+};
+
+export const listExpiryScans = async (
+  sessionId: string,
+  options?: RequestInit,
+): Promise<ExpiryScan[]> => {
+  return customFetch<ExpiryScan[]>(getListExpiryScansUrl(sessionId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListExpiryScansQueryKey = (sessionId: string) => {
+  return [`/api/expiry-sessions/${sessionId}/scans`] as const;
+};
+
+export const getListExpiryScansQueryOptions = <
+  TData = Awaited<ReturnType<typeof listExpiryScans>>,
+  TError = ErrorType<unknown>,
+>(
+  sessionId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listExpiryScans>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListExpiryScansQueryKey(sessionId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listExpiryScans>>> = ({
+    signal,
+  }) => listExpiryScans(sessionId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!sessionId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listExpiryScans>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListExpiryScansQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listExpiryScans>>
+>;
+export type ListExpiryScansQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List scans for a session
+ */
+
+export function useListExpiryScans<
+  TData = Awaited<ReturnType<typeof listExpiryScans>>,
+  TError = ErrorType<unknown>,
+>(
+  sessionId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listExpiryScans>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListExpiryScansQueryOptions(sessionId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get summary metrics for a session
+ */
+export const getGetExpirySessionSummaryUrl = (sessionId: string) => {
+  return `/api/expiry-sessions/${sessionId}/summary`;
+};
+
+export const getExpirySessionSummary = async (
+  sessionId: string,
+  options?: RequestInit,
+): Promise<ExpirySessionSummary> => {
+  return customFetch<ExpirySessionSummary>(
+    getGetExpirySessionSummaryUrl(sessionId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetExpirySessionSummaryQueryKey = (sessionId: string) => {
+  return [`/api/expiry-sessions/${sessionId}/summary`] as const;
+};
+
+export const getGetExpirySessionSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getExpirySessionSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  sessionId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getExpirySessionSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetExpirySessionSummaryQueryKey(sessionId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getExpirySessionSummary>>
+  > = ({ signal }) =>
+    getExpirySessionSummary(sessionId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!sessionId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getExpirySessionSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetExpirySessionSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getExpirySessionSummary>>
+>;
+export type GetExpirySessionSummaryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get summary metrics for a session
+ */
+
+export function useGetExpirySessionSummary<
+  TData = Awaited<ReturnType<typeof getExpirySessionSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  sessionId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getExpirySessionSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetExpirySessionSummaryQueryOptions(
+    sessionId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create an expiry scan row
+ */
+export const getCreateExpiryScanUrl = () => {
+  return `/api/expiry-scans`;
+};
+
+export const createExpiryScan = async (
+  newExpiryScan: NewExpiryScan,
+  options?: RequestInit,
+): Promise<ExpiryScan> => {
+  return customFetch<ExpiryScan>(getCreateExpiryScanUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(newExpiryScan),
+  });
+};
+
+export const getCreateExpiryScanMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createExpiryScan>>,
+    TError,
+    { data: BodyType<NewExpiryScan> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createExpiryScan>>,
+  TError,
+  { data: BodyType<NewExpiryScan> },
+  TContext
+> => {
+  const mutationKey = ["createExpiryScan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createExpiryScan>>,
+    { data: BodyType<NewExpiryScan> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createExpiryScan(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateExpiryScanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createExpiryScan>>
+>;
+export type CreateExpiryScanMutationBody = BodyType<NewExpiryScan>;
+export type CreateExpiryScanMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create an expiry scan row
+ */
+export const useCreateExpiryScan = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createExpiryScan>>,
+    TError,
+    { data: BodyType<NewExpiryScan> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createExpiryScan>>,
+  TError,
+  { data: BodyType<NewExpiryScan> },
+  TContext
+> => {
+  return useMutation(getCreateExpiryScanMutationOptions(options));
+};
+
+/**
+ * @summary Delete a scan row
+ */
+export const getDeleteExpiryScanUrl = (id: number) => {
+  return `/api/expiry-scans/${id}`;
+};
+
+export const deleteExpiryScan = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteExpiryScanUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteExpiryScanMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteExpiryScan>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteExpiryScan>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteExpiryScan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteExpiryScan>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteExpiryScan(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteExpiryScanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteExpiryScan>>
+>;
+
+export type DeleteExpiryScanMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a scan row
+ */
+export const useDeleteExpiryScan = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteExpiryScan>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteExpiryScan>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteExpiryScanMutationOptions(options));
+};
