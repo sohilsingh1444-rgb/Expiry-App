@@ -22,7 +22,28 @@ export async function parseBarcodeMaster(file: File): Promise<any[]> {
 
 export function exportToExcel(data: any[], filename: string) {
   const worksheet = xlsx.utils.json_to_sheet(data);
+  const headers = data.length > 0 ? Object.keys(data[0]) : [];
+
+  worksheet["!cols"] = headers.map((header) => {
+    const maxContentLength = data.reduce((max, row) => {
+      const value = row[header] == null ? "" : String(row[header]);
+      return Math.max(max, value.length);
+    }, header.length);
+
+    return { wch: Math.min(Math.max(maxContentLength + 2, 12), 35) };
+  });
+
+  if (headers.length > 0) {
+    worksheet["!autofilter"] = {
+      ref: xlsx.utils.encode_range({
+        s: { r: 0, c: 0 },
+        e: { r: data.length, c: headers.length - 1 },
+      }),
+    };
+    worksheet["!freeze"] = { xSplit: 0, ySplit: 1 };
+  }
+
   const workbook = xlsx.utils.book_new();
-  xlsx.utils.book_append_sheet(workbook, worksheet, "Scans");
+  xlsx.utils.book_append_sheet(workbook, worksheet, "Expiry Scans");
   xlsx.writeFile(workbook, `${filename}.xlsx`);
 }

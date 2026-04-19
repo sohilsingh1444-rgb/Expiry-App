@@ -61,8 +61,8 @@ const scanSchema = z.object({
 
 function calculateStatusAndDays(expiryDateStr: string, scanDateStr: string) {
   const expiry = parseISO(expiryDateStr);
-  const scan = parseISO(scanDateStr);
-  const days = differenceInDays(expiry, scan);
+  const today = parseISO(format(new Date(), "yyyy-MM-dd"));
+  const days = differenceInDays(expiry, today);
 
   let status: typeof ExpiryScanStatus[keyof typeof ExpiryScanStatus] = ExpiryScanStatus.OK;
   if (days < 0) {
@@ -74,6 +74,17 @@ function calculateStatusAndDays(expiryDateStr: string, scanDateStr: string) {
   }
   
   return { status, daysLeft: days };
+}
+
+function formatDateOnly(value?: string | Date | null) {
+  if (!value) return "";
+
+  try {
+    const date = value instanceof Date ? value : parseISO(String(value));
+    return format(date, "yyyy-MM-dd");
+  } catch {
+    return String(value).split("T")[0];
+  }
 }
 
 export default function Home() {
@@ -269,10 +280,10 @@ export default function Home() {
       "Item Number": s.itemNumber,
       "Description": s.description,
       "Qty": s.qty,
-      "Expiry Date": s.expiryDate,
+      "Expiry Date": formatDateOnly(s.expiryDate),
       "Status": s.status,
       "Days Left": s.daysLeft,
-      "Scan Date": s.scanDate,
+      "Scan Date": formatDateOnly(s.scanDate),
       "Action Required": s.actionRequired,
       "Remarks": s.remarks,
     }));
@@ -629,7 +640,8 @@ export default function Home() {
                       <TableHead className="font-semibold text-zinc-900">Item</TableHead>
                       <TableHead className="font-semibold text-zinc-900">Qty</TableHead>
                       <TableHead className="font-semibold text-zinc-900">Expiry Date</TableHead>
-                      <TableHead className="font-semibold text-zinc-900">Status</TableHead>
+                        <TableHead className="font-semibold text-zinc-900">Status</TableHead>
+                        <TableHead className="font-semibold text-zinc-900 text-right">Days Left</TableHead>
                       <TableHead className="text-right font-semibold text-zinc-900">Action</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -642,12 +654,13 @@ export default function Home() {
                           <div className="text-xs text-zinc-500 max-w-[150px] truncate" title={scan.description || ''}>{scan.description}</div>
                         </TableCell>
                         <TableCell className="font-mono">{scan.qty}</TableCell>
-                        <TableCell className="text-zinc-600">{scan.expiryDate}</TableCell>
+                        <TableCell className="text-zinc-600">{formatDateOnly(scan.expiryDate)}</TableCell>
                         <TableCell>
                           <Badge className={getStatusColor(scan.status)} variant="outline">
-                            {scan.status} ({scan.daysLeft}d)
+                            {scan.status}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-right font-mono font-semibold text-zinc-900">{scan.daysLeft}</TableCell>
                         <TableCell className="text-right">
                           <Button 
                             variant="ghost" 

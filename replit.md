@@ -18,13 +18,13 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Artifacts
 
-- **Expiry Scan App** (`artifacts/expiry-scan-app`, preview `/`): React + Vite web app for retail expiry scanning. Includes setup by PD user/store/date, local barcode master spreadsheet upload/persistence, scan entry, metrics, session table, wrong-scan delete, and Excel export.
+- **Expiry Scan App** (`artifacts/expiry-scan-app`, preview `/`): React + Vite web app for retail expiry scanning. Includes setup by PD user/store/date, local barcode master spreadsheet upload/persistence, scan entry, metrics, session table, wrong-scan delete, and formatted Excel export with clean date columns.
 - **API Server** (`artifacts/api-server`, preview `/api`): Express API backing the Expiry Scan App.
 - **Canvas** (`artifacts/mockup-sandbox`, preview `/__mockup`): design preview sandbox.
 
 ## Data Model
 
-- `expiry_scans` table stores scan rows with session context, barcode/item details, quantity, expiry/scan dates, calculated status, days left, action required, remarks, and creation timestamp.
+- `expiry_scans` table stores scan rows with session context, barcode/item details, quantity, expiry/scan dates, calculated status, days left, action required, remarks, and creation timestamp. API list and summary responses recalculate status/days-left from the current date so expiry urgency changes as dates get closer.
 - Barcode master files are intentionally stored in the browser locally after upload, mirroring the original upload-once workflow without requiring server-side file storage.
 
 ## Key Commands

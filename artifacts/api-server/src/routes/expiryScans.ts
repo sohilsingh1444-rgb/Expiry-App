@@ -16,6 +16,7 @@ import {
 const router: IRouter = Router();
 
 type ExpiryStatus = "Expired" | "Urgent" | "Near Expiry" | "OK";
+type ExpiryScanRow = typeof expiryScansTable.$inferSelect;
 
 function toDateOnly(value: Date): string {
   return value.toISOString().slice(0, 10);
@@ -50,6 +51,20 @@ function calculateStatus(expiryDate: Date, todayDate: Date): {
   }
 
   return { daysLeft, status: "OK", actionRequired: null };
+}
+
+function withCurrentExpiryStatus(row: ExpiryScanRow): ExpiryScanRow {
+  const status = calculateStatus(
+    dateOnlyToUtc(row.expiryDate),
+    dateOnlyToUtc(toDateOnly(new Date())),
+  );
+
+  return {
+    ...row,
+    daysLeft: status.daysLeft,
+    status: status.status,
+    actionRequired: status.actionRequired,
+  };
 }
 
 router.get("/expiry-sessions/latest", async (req, res): Promise<void> => {
@@ -98,7 +113,7 @@ router.get("/expiry-sessions/:sessionId/scans", async (req, res): Promise<void> 
     .where(eq(expiryScansTable.sessionId, params.data.sessionId))
     .orderBy(expiryScansTable.createdAt);
 
-  res.json(ListExpiryScansResponse.parse(rows));
+  res.json(ListExpiryScansResponse.parse(rows.map(withCurrentExpiryStatus)));
 });
 
 router.get("/expiry-sessions/:sessionId/summary", async (req, res): Promise<void> => {
@@ -115,7 +130,7 @@ router.get("/expiry-sessions/:sessionId/summary", async (req, res): Promise<void
     .where(eq(expiryScansTable.sessionId, params.data.sessionId));
 
   const today = dateOnlyToUtc(toDateOnly(new Date()));
-  const summary = rows.reduce(
+  const summary = rows.map(withCurrentExpiryStatus).reduce(
     (acc, row) => {
       const expiry = dateOnlyToUtc(row.expiryDate);
       acc.scans += 1;
