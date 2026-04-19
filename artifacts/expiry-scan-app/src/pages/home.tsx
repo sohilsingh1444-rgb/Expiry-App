@@ -9,9 +9,10 @@ import {
   getGetExpirySessionSummaryQueryKey,
   useCreateExpiryScan,
   useDeleteExpiryScan,
+  deleteExpiryScan,
   ExpiryScanStatus,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -210,6 +211,29 @@ export default function Home() {
     }
   });
 
+  const clearAllScans = useMutation({
+    mutationFn: async (ids: number[]) => {
+      await Promise.all(ids.map((id) => deleteExpiryScan(id)));
+    },
+    onSuccess: () => {
+      if (sessionId) {
+        queryClient.invalidateQueries({ queryKey: getListExpiryScansQueryKey(sessionId) });
+        queryClient.invalidateQueries({ queryKey: getGetExpirySessionSummaryQueryKey(sessionId) });
+      }
+      toast({
+        title: "All scans cleared",
+        description: "The current session list is now empty.",
+      });
+    },
+    onError: (err) => {
+      toast({
+        title: "Failed to clear scans",
+        description: String(err),
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSetupSubmit = (values: z.infer<typeof setupSchema>) => {
     setSetupData(values);
     setNewSessionId(
@@ -288,6 +312,18 @@ export default function Home() {
       "Remarks": s.remarks,
     }));
     exportToExcel(exportData, `Expiry_Scans_${setupData?.storeLocation || 'Export'}_${format(new Date(), 'yyyyMMdd_HHmm')}`);
+  };
+
+  const handleClearAll = () => {
+    if (!scans.length || clearAllScans.isPending) return;
+
+    const confirmed = window.confirm(
+      `Clear all ${scans.length} scan${scans.length === 1 ? "" : "s"} from this session? This cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    clearAllScans.mutate(scans.map((scan) => scan.id));
   };
 
   const getStatusColor = (status: string) => {
@@ -606,7 +642,7 @@ export default function Home() {
           <Card className="border-zinc-200 shadow-sm flex flex-col h-[calc(100dvh-[320px])] min-h-[400px]">
             <CardHeader className="py-4 border-b border-zinc-100 flex flex-row items-center justify-between space-y-0 bg-white rounded-t-xl shrink-0">
               <CardTitle className="text-lg">Recent Scans</CardTitle>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center justify-end gap-3">
                 <div className="flex items-center space-x-2">
                   <Switch 
                     id="non-expired" 
@@ -620,6 +656,16 @@ export default function Home() {
                 <Button onClick={handleExport} size="sm" variant="outline" className="border-zinc-300 font-medium" disabled={visibleScans.length === 0}>
                   <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />
                   Export
+                </Button>
+                <Button
+                  onClick={handleClearAll}
+                  size="sm"
+                  variant="outline"
+                  className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 font-medium"
+                  disabled={scans.length === 0 || clearAllScans.isPending}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  {clearAllScans.isPending ? "Clearing..." : "Clear All"}
                 </Button>
               </div>
             </CardHeader>
