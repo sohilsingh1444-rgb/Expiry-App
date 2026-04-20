@@ -20,9 +20,51 @@ export async function parseBarcodeMaster(file: File): Promise<any[]> {
   });
 }
 
+function parseDateOnly(value: unknown) {
+  if (value instanceof Date) return value;
+  if (typeof value !== "string") return null;
+
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+
+  return new Date(year, month - 1, day);
+}
+
 export function exportToExcel(data: any[], filename: string) {
   const worksheet = xlsx.utils.json_to_sheet(data);
   const headers = data.length > 0 ? Object.keys(data[0]) : [];
+  const expiryDateColumn = headers.indexOf("Expiry Date");
+  const scanDateColumn = headers.indexOf("Scan Date");
+  const daysLeftColumn = headers.indexOf("Days Left");
+
+  for (let rowIndex = 1; rowIndex <= data.length; rowIndex += 1) {
+    for (const columnIndex of [expiryDateColumn, scanDateColumn]) {
+      if (columnIndex < 0) continue;
+
+      const address = xlsx.utils.encode_cell({ r: rowIndex, c: columnIndex });
+      const date = parseDateOnly(data[rowIndex - 1][headers[columnIndex]]);
+
+      if (date) {
+        worksheet[address] = {
+          t: "d",
+          v: date,
+          z: "dd/mm/yyyy",
+        };
+      }
+    }
+
+    if (expiryDateColumn >= 0 && daysLeftColumn >= 0) {
+      const daysLeftAddress = xlsx.utils.encode_cell({ r: rowIndex, c: daysLeftColumn });
+      const expiryDateAddress = xlsx.utils.encode_cell({ r: rowIndex, c: expiryDateColumn });
+
+      worksheet[daysLeftAddress] = {
+        t: "n",
+        f: `${expiryDateAddress}-TODAY()`,
+        v: data[rowIndex - 1]["Days Left"] ?? 0,
+        z: "0",
+      };
+    }
+  }
 
   worksheet["!cols"] = headers.map((header) => {
     const maxContentLength = data.reduce((max, row) => {
@@ -44,6 +86,7 @@ export function exportToExcel(data: any[], filename: string) {
   }
 
   const workbook = xlsx.utils.book_new();
+  workbook.Workbook = { CalcPr: { fullCalcOnLoad: true } };
   xlsx.utils.book_append_sheet(workbook, worksheet, "Expiry Scans");
   xlsx.writeFile(workbook, `${filename}.xlsx`);
 }

@@ -18,7 +18,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Artifacts
 
-- **Expiry Scan App** (`artifacts/expiry-scan-app`, preview `/`): React + Vite web app for retail expiry scanning. Includes setup by PD user/store/date, local barcode master spreadsheet upload/persistence, scan entry, metrics, session table, wrong-scan delete, clear-all session cleanup, and formatted Excel export with clean date columns.
+- **Expiry Scan App** (`artifacts/expiry-scan-app`, preview `/`): React + Vite web app for retail expiry scanning. Includes setup by PD user/store/date, local barcode master spreadsheet upload/persistence, scan entry, metrics, session table, wrong-scan delete, clear-all session cleanup, and formatted Excel export with clean date columns plus live Days Left formulas.
 - **API Server** (`artifacts/api-server`, preview `/api`): Express API backing the Expiry Scan App.
 - **Canvas** (`artifacts/mockup-sandbox`, preview `/__mockup`): design preview sandbox.
 
