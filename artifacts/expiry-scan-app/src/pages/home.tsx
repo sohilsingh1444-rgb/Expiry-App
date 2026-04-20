@@ -60,9 +60,26 @@ const scanSchema = z.object({
   remarks: z.string().optional(),
 });
 
-function calculateStatusAndDays(expiryDateStr: string, scanDateStr: string) {
+function getTodayDateKey() {
+  return format(new Date(), "yyyy-MM-dd");
+}
+
+function getActionRequired(status: typeof ExpiryScanStatus[keyof typeof ExpiryScanStatus]) {
+  switch (status) {
+    case ExpiryScanStatus.Expired:
+      return "Remove from shelf";
+    case ExpiryScanStatus.Urgent:
+      return "Immediate review / markdown";
+    case ExpiryScanStatus.Near_Expiry:
+      return "Monitor / markdown";
+    default:
+      return null;
+  }
+}
+
+function calculateStatusAndDays(expiryDateStr: string, todayDateStr = getTodayDateKey()) {
   const expiry = parseISO(expiryDateStr);
-  const today = parseISO(format(new Date(), "yyyy-MM-dd"));
+  const today = parseISO(todayDateStr);
   const days = differenceInDays(expiry, today);
 
   let status: typeof ExpiryScanStatus[keyof typeof ExpiryScanStatus] = ExpiryScanStatus.OK;
@@ -95,6 +112,7 @@ export default function Home() {
   const [setupData, setSetupData] = useState<{pdUserName: string, storeLocation: string, scanDate: string} | null>(null);
   const [newSessionId, setNewSessionId] = useState<string | null>(null);
   const [showNonExpiredOnly, setShowNonExpiredOnly] = useState(false);
+  const [todayDateKey, setTodayDateKey] = useState(getTodayDateKey);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const { masterData, isLoaded, saveMasterData, clearMasterData, lookupBarcode } = useBarcodeMaster();
@@ -123,6 +141,17 @@ export default function Home() {
   const watchBarcode = scanForm.watch("barcode");
   const watchExpiryDate = scanForm.watch("expiryDate");
   const watchQty = scanForm.watch("qty");
+
+  useEffect(() => {
+    const refreshToday = () => {
+      setTodayDateKey(getTodayDateKey());
+    };
+
+    refreshToday();
+    const interval = window.setInterval(refreshToday, 60 * 1000);
+
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (watchBarcode && watchBarcode.length > 3) {
@@ -290,10 +319,56 @@ export default function Home() {
     e.target.value = "";
   };
 
+  const scansWithCurrentDays = useMemo(() => {
+    return scans.map((scan) => {
+      const current = calculateStatusAndDays(formatDateOnly(scan.expiryDate), todayDateKey);
+
+      return {
+        ...scan,
+        status: current.status,
+        daysLeft: current.daysLeft,
+        actionRequired: getActionRequired(current.status),
+      };
+    });
+  }, [scans, todayDateKey]);
+
+  const liveSummary = useMemo(() => {
+    return scansWithCurrentDays.reduce(
+      (acc, scan) => {
+        acc.scans += 1;
+        acc.totalQty += scan.qty;
+
+        if (scan.status === ExpiryScanStatus.Expired) {
+          acc.expiredItems += 1;
+        } else {
+          acc.activeItems += 1;
+        }
+
+        if (scan.status === ExpiryScanStatus.Urgent) {
+          acc.urgentItems += 1;
+        }
+
+        if (scan.status === ExpiryScanStatus.Near_Expiry) {
+          acc.nearExpiryItems += 1;
+        }
+
+        return acc;
+      },
+      {
+        scans: 0,
+        activeItems: 0,
+        expiredItems: 0,
+        totalQty: 0,
+        urgentItems: 0,
+        nearExpiryItems: 0,
+      },
+    );
+  }, [scansWithCurrentDays]);
+
   const visibleScans = useMemo(() => {
-    if (!showNonExpiredOnly) return scans;
-    return scans.filter(s => s.status !== ExpiryScanStatus.Expired);
-  }, [scans, showNonExpiredOnly]);
+    if (!showNonExpiredOnly) return scansWithCurrentDays;
+    return scansWithCurrentDays.filter(s => s.status !== ExpiryScanStatus.Expired);
+  }, [scansWithCurrentDays, showNonExpiredOnly]);
 
   const handleExport = () => {
     if (!visibleScans.length) return;
@@ -338,11 +413,11 @@ export default function Home() {
   const currentStatusPreview = useMemo(() => {
     if (!watchExpiryDate || !setupData?.scanDate) return null;
     try {
-      return calculateStatusAndDays(watchExpiryDate, setupData.scanDate);
+      return calculateStatusAndDays(watchExpiryDate, todayDateKey);
     } catch(e) {
       return null;
     }
-  }, [watchExpiryDate, setupData?.scanDate]);
+  }, [watchExpiryDate, setupData?.scanDate, todayDateKey]);
 
   if (!isSetupComplete) {
     return (
@@ -615,25 +690,25 @@ export default function Home() {
             <Card className="border-zinc-200 shadow-sm">
               <CardContent className="p-4">
                 <div className="text-sm font-medium text-zinc-500 mb-1">Total Scans</div>
-                <div className="text-2xl font-bold text-zinc-900">{summary?.scans || 0}</div>
+                <div className="text-2xl font-bold text-zinc-900">{liveSummary.scans}</div>
               </CardContent>
             </Card>
             <Card className="border-red-200 bg-red-50/50 shadow-sm">
               <CardContent className="p-4">
                 <div className="text-sm font-medium text-red-700 mb-1">Expired</div>
-                <div className="text-2xl font-bold text-red-700">{summary?.expiredItems || 0}</div>
+                <div className="text-2xl font-bold text-red-700">{liveSummary.expiredItems}</div>
               </CardContent>
             </Card>
             <Card className="border-orange-200 bg-orange-50/50 shadow-sm">
               <CardContent className="p-4">
                 <div className="text-sm font-medium text-orange-700 mb-1">Urgent</div>
-                <div className="text-2xl font-bold text-orange-700">{summary?.urgentItems || 0}</div>
+                <div className="text-2xl font-bold text-orange-700">{liveSummary.urgentItems}</div>
               </CardContent>
             </Card>
             <Card className="border-yellow-200 bg-yellow-50/50 shadow-sm">
               <CardContent className="p-4">
                 <div className="text-sm font-medium text-yellow-800 mb-1">Near Expiry</div>
-                <div className="text-2xl font-bold text-yellow-800">{summary?.nearExpiryItems || 0}</div>
+                <div className="text-2xl font-bold text-yellow-800">{liveSummary.nearExpiryItems}</div>
               </CardContent>
             </Card>
           </div>

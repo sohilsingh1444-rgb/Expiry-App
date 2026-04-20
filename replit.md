@@ -24,7 +24,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Data Model
 
-- `expiry_scans` table stores scan rows with session context, barcode/item details, quantity, expiry/scan dates, calculated status, days left, action required, remarks, and creation timestamp. API list and summary responses recalculate status/days-left from the current date so expiry urgency changes as dates get closer.
+- `expiry_scans` table stores scan rows with session context, barcode/item details, quantity, expiry/scan dates, calculated status, days left, action required, remarks, and creation timestamp. API list/summary responses and the web UI recalculate status/days-left from the current date so expiry urgency changes as dates get closer, including while the app remains open past midnight.
 - Barcode master files are intentionally stored in the browser locally after upload, mirroring the original upload-once workflow without requiring server-side file storage.
 
 ## Key Commands
