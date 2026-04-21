@@ -82,8 +82,11 @@ export async function exportToExcel(data: any[], filename: string) {
     cell.font = { bold: true, color: { argb: 'FFFBBF24' }, size: 11 };
     cell.alignment = { vertical: 'middle', horizontal: 'center' };
     cell.border = BORDER_THIN;
+    cell.protection = { locked: false };
   });
   headerRow.height = 22;
+
+  const protectedCols = new Set([daysLeftIdx, statusIdx, actionReqIdx].filter(i => i >= 0));
 
   data.forEach((row, ri) => {
     const excelRow = sheet.addRow(headers.map((h) => row[h]));
@@ -91,10 +94,12 @@ export async function exportToExcel(data: any[], filename: string) {
 
     excelRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
       const colIdx = colNum - 1;
+      const isProtected = protectedCols.has(colIdx);
 
       cell.border = BORDER_THIN;
       cell.alignment = { vertical: 'middle', horizontal: colIdx === statusIdx ? 'center' : 'left' };
       cell.font = { size: 10 };
+      cell.protection = { locked: isProtected };
 
       if (colIdx === expiryDateIdx || colIdx === scanDateIdx) {
         const date = parseDateOnly(row[headers[colIdx]]);
@@ -109,6 +114,7 @@ export async function exportToExcel(data: any[], filename: string) {
         cell.value = { formula: `${expiryCell}-TODAY()`, result: row['Days Left'] ?? 0 };
         cell.numFmt = '0';
         cell.alignment = { ...cell.alignment, horizontal: 'center' };
+        cell.font = { size: 10, italic: true, color: { argb: 'FF374151' } };
       }
 
       if (colIdx === statusIdx && daysLeftIdx >= 0) {
@@ -129,10 +135,23 @@ export async function exportToExcel(data: any[], filename: string) {
           formula: `IF(${daysCell}<0,"Remove from shelf",IF(${daysCell}<=2,"Immediate review / markdown",IF(${daysCell}<=15,"Monitor / markdown","No action required")))`,
           result: row['Action Required'] ?? 'No action required',
         };
+        cell.font = { size: 10, italic: true, color: { argb: 'FF374151' } };
       }
     });
 
     excelRow.height = 18;
+  });
+
+  await sheet.protect('', {
+    selectLockedCells:   true,
+    selectUnlockedCells: true,
+    formatCells:         true,
+    formatColumns:       true,
+    formatRows:          true,
+    insertRows:          false,
+    deleteRows:          false,
+    sort:                true,
+    autoFilter:          true,
   });
 
   sheet.autoFilter = {
