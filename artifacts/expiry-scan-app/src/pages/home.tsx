@@ -77,7 +77,12 @@ function getActionRequired(status: typeof ExpiryScanStatus[keyof typeof ExpirySc
   }
 }
 
-function calculateStatusAndDays(expiryDateStr: string, todayDateStr = getTodayDateKey()) {
+function calculateStatusAndDays(
+  expiryDateStr: string,
+  todayDateStr = getTodayDateKey(),
+  urgentDays = 2,
+  nearExpiryDays = 15,
+) {
   const expiry = parseISO(expiryDateStr);
   const today = parseISO(todayDateStr);
   const days = differenceInDays(expiry, today);
@@ -85,9 +90,9 @@ function calculateStatusAndDays(expiryDateStr: string, todayDateStr = getTodayDa
   let status: typeof ExpiryScanStatus[keyof typeof ExpiryScanStatus] = ExpiryScanStatus.OK;
   if (days < 0) {
     status = ExpiryScanStatus.Expired;
-  } else if (days <= 2) {
+  } else if (days <= urgentDays) {
     status = ExpiryScanStatus.Urgent;
-  } else if (days <= 15) {
+  } else if (days <= nearExpiryDays) {
     status = ExpiryScanStatus.Near_Expiry;
   }
   
@@ -105,6 +110,8 @@ function formatDateOnly(value?: string | Date | null) {
   }
 }
 
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 export default function Home() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -113,6 +120,7 @@ export default function Home() {
   const [newSessionId, setNewSessionId] = useState<string | null>(null);
   const [showNonExpiredOnly, setShowNonExpiredOnly] = useState(false);
   const [todayDateKey, setTodayDateKey] = useState(getTodayDateKey);
+  const [thresholds, setThresholds] = useState({ urgentDays: 2, nearExpiryDays: 15 });
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const { masterData, isLoaded, saveMasterData, clearMasterData, lookupBarcode } = useBarcodeMaster();
@@ -151,6 +159,17 @@ export default function Home() {
     const interval = window.setInterval(refreshToday, 60 * 1000);
 
     return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/admin/settings`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data.urgentDays === "number" && typeof data.nearExpiryDays === "number") {
+          setThresholds({ urgentDays: data.urgentDays, nearExpiryDays: data.nearExpiryDays });
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -321,7 +340,7 @@ export default function Home() {
 
   const scansWithCurrentDays = useMemo(() => {
     return scans.map((scan) => {
-      const current = calculateStatusAndDays(formatDateOnly(scan.expiryDate), todayDateKey);
+      const current = calculateStatusAndDays(formatDateOnly(scan.expiryDate), todayDateKey, thresholds.urgentDays, thresholds.nearExpiryDays);
 
       return {
         ...scan,
@@ -330,7 +349,7 @@ export default function Home() {
         actionRequired: getActionRequired(current.status),
       };
     });
-  }, [scans, todayDateKey]);
+  }, [scans, todayDateKey, thresholds]);
 
   const liveSummary = useMemo(() => {
     return scansWithCurrentDays.reduce(
@@ -413,11 +432,11 @@ export default function Home() {
   const currentStatusPreview = useMemo(() => {
     if (!watchExpiryDate || !setupData?.scanDate) return null;
     try {
-      return calculateStatusAndDays(watchExpiryDate, todayDateKey);
+      return calculateStatusAndDays(watchExpiryDate, todayDateKey, thresholds.urgentDays, thresholds.nearExpiryDays);
     } catch(e) {
       return null;
     }
-  }, [watchExpiryDate, setupData?.scanDate, todayDateKey]);
+  }, [watchExpiryDate, setupData?.scanDate, todayDateKey, thresholds]);
 
   if (!isSetupComplete) {
     return (
@@ -504,6 +523,9 @@ export default function Home() {
             <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white" onClick={() => setIsSetupComplete(false)}>
               Change
             </Button>
+            <a href="/admin" className="text-zinc-500 hover:text-zinc-300 text-xs transition-colors">
+              Admin
+            </a>
           </div>
         </div>
       </header>
