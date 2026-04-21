@@ -201,6 +201,21 @@ router.post("/expiry-scans", async (req, res): Promise<void> => {
   res.status(201).json(ListExpiryScansResponseItem.parse(row));
 });
 
+router.delete("/expiry-sessions/:sessionId", async (req, res): Promise<void> => {
+  const { sessionId } = req.params;
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId is required" });
+    return;
+  }
+
+  const deleted = await db
+    .delete(expiryScansTable)
+    .where(eq(expiryScansTable.sessionId, sessionId))
+    .returning({ id: expiryScansTable.id });
+
+  res.json({ deleted: deleted.length });
+});
+
 router.delete("/expiry-scans/:id", async (req, res): Promise<void> => {
   const params = DeleteExpiryScanParams.safeParse(req.params);
 

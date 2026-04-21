@@ -406,6 +406,20 @@ export default function Home() {
       "Remarks": s.remarks,
     }));
     await exportToExcel(exportData, `Expiry_Scans_${setupData?.storeLocation || 'Export'}_${format(new Date(), 'yyyyMMdd_HHmm')}`);
+
+    if (sessionId) {
+      try {
+        await fetch(`${API_BASE}/api/expiry-sessions/${sessionId}`, { method: "DELETE" });
+        queryClient.invalidateQueries({ queryKey: getListExpiryScansQueryKey(sessionId) });
+        queryClient.invalidateQueries({ queryKey: getGetExpirySessionSummaryQueryKey(sessionId) });
+        toast({
+          title: "Exported and cleared",
+          description: "Excel downloaded. Session data removed from database to save space.",
+        });
+      } catch {
+        // Silent — export already succeeded, cleanup failure is non-critical
+      }
+    }
   };
 
   const handleClearAll = () => {
