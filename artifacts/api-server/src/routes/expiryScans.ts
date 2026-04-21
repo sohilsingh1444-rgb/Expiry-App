@@ -46,7 +46,7 @@ function calculateStatus(expiryDate: Date, todayDate: Date): {
     };
   }
 
-  if (daysLeft <= 7) {
+  if (daysLeft <= 15) {
     return { daysLeft, status: "Near Expiry", actionRequired: "Monitor / markdown" };
   }
 

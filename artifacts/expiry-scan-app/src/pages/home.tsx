@@ -87,7 +87,7 @@ function calculateStatusAndDays(expiryDateStr: string, todayDateStr = getTodayDa
     status = ExpiryScanStatus.Expired;
   } else if (days <= 2) {
     status = ExpiryScanStatus.Urgent;
-  } else if (days <= 7) {
+  } else if (days <= 15) {
     status = ExpiryScanStatus.Near_Expiry;
   }
   
@@ -370,7 +370,7 @@ export default function Home() {
     return scansWithCurrentDays.filter(s => s.status !== ExpiryScanStatus.Expired);
   }, [scansWithCurrentDays, showNonExpiredOnly]);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!visibleScans.length) return;
     const exportData = visibleScans.map(s => ({
       "PD User Name": s.pdUserName,
@@ -386,7 +386,7 @@ export default function Home() {
       "Action Required": s.actionRequired,
       "Remarks": s.remarks,
     }));
-    exportToExcel(exportData, `Expiry_Scans_${setupData?.storeLocation || 'Export'}_${format(new Date(), 'yyyyMMdd_HHmm')}`);
+    await exportToExcel(exportData, `Expiry_Scans_${setupData?.storeLocation || 'Export'}_${format(new Date(), 'yyyyMMdd_HHmm')}`);
   };
 
   const handleClearAll = () => {

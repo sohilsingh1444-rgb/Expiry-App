@@ -1,4 +1,5 @@
 import * as xlsx from 'xlsx';
+import ExcelJS from 'exceljs';
 
 export async function parseBarcodeMaster(file: File): Promise<any[]> {
   return new Promise((resolve, reject) => {
@@ -20,73 +21,141 @@ export async function parseBarcodeMaster(file: File): Promise<any[]> {
   });
 }
 
-function parseDateOnly(value: unknown) {
+function parseDateOnly(value: unknown): Date | null {
   if (value instanceof Date) return value;
-  if (typeof value !== "string") return null;
-
-  const [year, month, day] = value.split("-").map(Number);
+  if (typeof value !== 'string') return null;
+  const [year, month, day] = value.split('-').map(Number);
   if (!year || !month || !day) return null;
-
   return new Date(year, month - 1, day);
 }
 
-export function exportToExcel(data: any[], filename: string) {
-  const worksheet = xlsx.utils.json_to_sheet(data);
-  const headers = data.length > 0 ? Object.keys(data[0]) : [];
-  const expiryDateColumn = headers.indexOf("Expiry Date");
-  const scanDateColumn = headers.indexOf("Scan Date");
-  const daysLeftColumn = headers.indexOf("Days Left");
+const BORDER_THIN: Partial<ExcelJS.Borders> = {
+  top:    { style: 'thin', color: { argb: 'FFB0B0B0' } },
+  left:   { style: 'thin', color: { argb: 'FFB0B0B0' } },
+  bottom: { style: 'thin', color: { argb: 'FFB0B0B0' } },
+  right:  { style: 'thin', color: { argb: 'FFB0B0B0' } },
+};
 
-  for (let rowIndex = 1; rowIndex <= data.length; rowIndex += 1) {
-    for (const columnIndex of [expiryDateColumn, scanDateColumn]) {
-      if (columnIndex < 0) continue;
+const HEADER_FILL: ExcelJS.Fill = {
+  type: 'pattern',
+  pattern: 'solid',
+  fgColor: { argb: 'FF1C1C1E' },
+};
 
-      const address = xlsx.utils.encode_cell({ r: rowIndex, c: columnIndex });
-      const date = parseDateOnly(data[rowIndex - 1][headers[columnIndex]]);
+const STATUS_COLORS: Record<string, { fg: string; bg: string }> = {
+  Expired:     { fg: 'FFFFFFFF', bg: 'FFB91C1C' },
+  Urgent:      { fg: 'FFFFFFFF', bg: 'FFD97706' },
+  'Near Expiry': { fg: 'FF1A1A1A', bg: 'FFFBBF24' },
+  OK:          { fg: 'FFFFFFFF', bg: 'FF16A34A' },
+};
 
-      if (date) {
-        worksheet[address] = {
-          t: "d",
-          v: date,
-          z: "dd/mm/yyyy",
-        };
-      }
-    }
+export async function exportToExcel(data: any[], filename: string) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.calcProperties.fullCalcOnLoad = true;
 
-    if (expiryDateColumn >= 0 && daysLeftColumn >= 0) {
-      const daysLeftAddress = xlsx.utils.encode_cell({ r: rowIndex, c: daysLeftColumn });
-      const expiryDateAddress = xlsx.utils.encode_cell({ r: rowIndex, c: expiryDateColumn });
+  const sheet = workbook.addWorksheet('Expiry Scans');
 
-      worksheet[daysLeftAddress] = {
-        t: "n",
-        f: `${expiryDateAddress}-TODAY()`,
-        v: data[rowIndex - 1]["Days Left"] ?? 0,
-        z: "0",
-      };
-    }
+  if (data.length === 0) {
+    const buf = await workbook.xlsx.writeBuffer();
+    downloadBuffer(buf, filename);
+    return;
   }
 
-  worksheet["!cols"] = headers.map((header) => {
-    const maxContentLength = data.reduce((max, row) => {
-      const value = row[header] == null ? "" : String(row[header]);
-      return Math.max(max, value.length);
-    }, header.length);
+  const headers = Object.keys(data[0]);
+  const expiryDateIdx  = headers.indexOf('Expiry Date');
+  const scanDateIdx    = headers.indexOf('Scan Date');
+  const daysLeftIdx    = headers.indexOf('Days Left');
+  const statusIdx      = headers.indexOf('Status');
+  const actionReqIdx   = headers.indexOf('Action Required');
 
-    return { wch: Math.min(Math.max(maxContentLength + 2, 12), 35) };
+  sheet.columns = headers.map((header) => {
+    const maxLen = data.reduce((max, row) => {
+      const val = row[header] == null ? '' : String(row[header]);
+      return Math.max(max, val.length);
+    }, header.length);
+    return { header, key: header, width: Math.min(Math.max(maxLen + 3, 12), 38) };
   });
 
-  if (headers.length > 0) {
-    worksheet["!autofilter"] = {
-      ref: xlsx.utils.encode_range({
-        s: { r: 0, c: 0 },
-        e: { r: data.length, c: headers.length - 1 },
-      }),
-    };
-    worksheet["!freeze"] = { xSplit: 0, ySplit: 1 };
-  }
+  const headerRow = sheet.getRow(1);
+  headerRow.eachCell((cell) => {
+    cell.fill = HEADER_FILL;
+    cell.font = { bold: true, color: { argb: 'FFFBBF24' }, size: 11 };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    cell.border = BORDER_THIN;
+  });
+  headerRow.height = 22;
 
-  const workbook = xlsx.utils.book_new();
-  workbook.Workbook = { CalcPr: { fullCalcOnLoad: true } };
-  xlsx.utils.book_append_sheet(workbook, worksheet, "Expiry Scans");
-  xlsx.writeFile(workbook, `${filename}.xlsx`);
+  data.forEach((row, ri) => {
+    const excelRow = sheet.addRow(headers.map((h) => row[h]));
+    const excelRowNum = ri + 2;
+
+    excelRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
+      const colIdx = colNum - 1;
+
+      cell.border = BORDER_THIN;
+      cell.alignment = { vertical: 'middle', horizontal: colIdx === statusIdx ? 'center' : 'left' };
+      cell.font = { size: 10 };
+
+      if (colIdx === expiryDateIdx || colIdx === scanDateIdx) {
+        const date = parseDateOnly(row[headers[colIdx]]);
+        if (date) {
+          cell.value = date;
+          cell.numFmt = 'dd/mm/yyyy';
+        }
+      }
+
+      if (colIdx === daysLeftIdx && expiryDateIdx >= 0) {
+        const expiryCell = sheet.getCell(excelRowNum, expiryDateIdx + 1).address;
+        cell.value = { formula: `${expiryCell}-TODAY()`, result: row['Days Left'] ?? 0 };
+        cell.numFmt = '0';
+        cell.alignment = { ...cell.alignment, horizontal: 'center' };
+      }
+
+      if (colIdx === statusIdx && daysLeftIdx >= 0) {
+        const daysCell = sheet.getCell(excelRowNum, daysLeftIdx + 1).address;
+        cell.value = {
+          formula: `IF(${daysCell}<0,"Expired",IF(${daysCell}<=2,"Urgent",IF(${daysCell}<=15,"Near Expiry","OK")))`,
+          result: row['Status'] ?? 'OK',
+        };
+
+        const colors = STATUS_COLORS[row['Status'] as string] ?? STATUS_COLORS['OK'];
+        cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.bg } };
+        cell.font  = { bold: true, color: { argb: colors.fg }, size: 10 };
+      }
+
+      if (colIdx === actionReqIdx && daysLeftIdx >= 0) {
+        const daysCell = sheet.getCell(excelRowNum, daysLeftIdx + 1).address;
+        cell.value = {
+          formula: `IF(${daysCell}<0,"Remove from shelf",IF(${daysCell}<=2,"Immediate review / markdown",IF(${daysCell}<=15,"Monitor / markdown","No action required")))`,
+          result: row['Action Required'] ?? 'No action required',
+        };
+      }
+    });
+
+    excelRow.height = 18;
+  });
+
+  sheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to:   { row: data.length + 1, column: headers.length },
+  };
+
+  sheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
+
+  const buf = await workbook.xlsx.writeBuffer();
+  downloadBuffer(buf, filename);
+}
+
+function downloadBuffer(buf: ArrayBuffer | Buffer, filename: string) {
+  const blob = new Blob([buf], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href     = url;
+  a.download = `${filename}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
