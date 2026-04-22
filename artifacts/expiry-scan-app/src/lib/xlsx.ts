@@ -1,6 +1,5 @@
-import * as xlsx from 'xlsx';
-
 export async function parseBarcodeMaster(file: File): Promise<any[]> {
+  const xlsx = await import('xlsx');
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -10,7 +9,7 @@ export async function parseBarcodeMaster(file: File): Promise<any[]> {
         const firstSheet = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheet];
         const json = xlsx.utils.sheet_to_json(worksheet);
-        resolve(json);
+        resolve(json as any[]);
       } catch (err) {
         reject(err);
       }
@@ -124,7 +123,6 @@ export async function exportToExcel(data: any[], filename: string) {
           formula: `IF(${daysCell}<0,"Expired",IF(${daysCell}<=2,"Urgent",IF(${daysCell}<=15,"Near Expiry","OK")))`,
           result: row['Status'] ?? 'OK',
         };
-
         const colors = STATUS_COLORS[row['Status'] as string] ?? STATUS_COLORS['OK'];
         cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.bg } };
         cell.font  = { bold: true, color: { argb: colors.fg }, size: 10 };
