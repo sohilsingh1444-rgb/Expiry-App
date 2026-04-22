@@ -25,11 +25,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Trash2, Settings, LogOut, ShieldCheck } from "lucide-react";
 import { format, parseISO } from "date-fns";
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { getApiBase } from "@/lib/api-base";
 
 function apiUrl(path: string) {
-  return `${BASE}/api${path}`;
+  return `${getApiBase()}/api${path}`;
 }
 
 type Session = {

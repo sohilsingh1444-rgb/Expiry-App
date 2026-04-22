@@ -43,6 +43,7 @@ import { useToast } from "@/hooks/use-toast";
 import { AlertCircle, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight } from "lucide-react";
 import { parseBarcodeMaster, exportToExcel } from "@/lib/xlsx";
 import { useBarcodeMaster } from "@/hooks/use-barcode-master";
+import { getApiBase } from "@/lib/api-base";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const setupSchema = z.object({
@@ -110,7 +111,7 @@ function formatDateOnly(value?: string | Date | null) {
   }
 }
 
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const API_BASE = getApiBase();
 
 export default function Home() {
   const { toast } = useToast();
