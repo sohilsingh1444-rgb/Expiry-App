@@ -1,0 +1,61 @@
+[Region: us-west1]
+==============
+Using Nixpacks
+==============
+
+context: 3lx3-CgoD
+╔═════════════════════════════ Nixpacks v1.38.0 ═════════════════════════════╗
+║ setup      │ nodejs_20, nodePackages.pnpm                                  ║
+║────────────────────────────────────────────────────────────────────────────║
+║ install    │ pnpm install --no-frozen-lockfile                             ║
+║────────────────────────────────────────────────────────────────────────────║
+║ build      │ pnpm --filter @workspace/api-server run build                 ║
+║────────────────────────────────────────────────────────────────────────────║
+║ start      │ node --enable-source-maps artifacts/api-server/dist/index.mjs ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+internal
+load build definition from Dockerfile
+0ms
+
+internal
+load metadata for ghcr.io/railwayapp/nixpacks:ubuntu-1745885067
+128ms
+
+internal
+load .dockerignore
+0ms
+
+internal
+load build context
+0ms
+
+stage-0
+COPY .nixpacks/nixpkgs-ffeebf0acf3ae8b29f8c7049cd911b9636efd7e7.nix .nixpacks/nixpkgs-ffeebf0acf3ae8b29f8c7049cd911b9636efd7e7.nix cached
+0ms
+
+stage-0
+RUN nix-env -if .nixpacks/nixpkgs-ffeebf0acf3ae8b29f8c7049cd911b9636efd7e7.nix && nix-collect-garbage -d cached
+0ms
+
+stage-0
+COPY . /app/.
+238ms
+
+stage-0
+RUN pnpm install --no-frozen-lockfile
+2s
+Scope: all 7 workspace projects
+/app/artifacts/api-server:
+ ERR_PNPM_WORKSPACE_PKG_NOT_FOUND  In artifacts/api-server: "@workspace/db@workspace:*" is in the dependencies but no package named "@workspace/db" is present in the workspace
+This error happened while installing a direct dependency of /app/artifacts/api-server
+Packages found in the workspace: 
+Dockerfile:20
+-------------------
+18 |     ENV NIXPACKS_PATH=/app/node_modules/.bin:$NIXPACKS_PATH
+19 |     COPY . /app/.
+20 | >>> RUN --mount=type=cache,id=s/eff8b3e0-e0bc-4b8b-a74e-0402993af4ab-/root/local/share/pnpm/store/v3,target=/root/.local/share/pnpm/store/v3 pnpm install --no-frozen-lockfile
+21 |
+22 |     # build phase
+-------------------
+Error: Docker build failed
