@@ -4,26 +4,29 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-function getConnectionString(): string {
+function getConnectionConfig(): { connectionString: string; ssl?: { rejectUnauthorized: boolean } } {
   const supabasePw = process.env.SUPABASE_DATABASE_URL;
   if (supabasePw && !supabasePw.startsWith("postgresql://")) {
-    return `postgresql://postgres.ilawvbdiapajzvjvawds:${encodeURIComponent(supabasePw)}@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres`;
+    return {
+      connectionString: `postgresql://postgres.ilawvbdiapajzvjvawds:${encodeURIComponent(supabasePw)}@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres`,
+      ssl: { rejectUnauthorized: false },
+    };
   }
   if (supabasePw && supabasePw.startsWith("postgresql://")) {
-    return supabasePw;
+    return {
+      connectionString: supabasePw,
+      ssl: { rejectUnauthorized: false },
+    };
   }
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
   }
-  return process.env.DATABASE_URL;
+  return { connectionString: process.env.DATABASE_URL };
 }
 
-const connectionString = getConnectionString();
+const config = getConnectionConfig();
 
-export const pool = new Pool({
-  connectionString,
-  ssl: { rejectUnauthorized: false },
-});
+export const pool = new Pool(config);
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";
