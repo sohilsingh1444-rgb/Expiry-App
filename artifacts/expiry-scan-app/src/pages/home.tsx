@@ -187,6 +187,13 @@ export default function Home() {
     }
   }, [watchBarcode, lookupBarcode, scanForm]);
 
+  useEffect(() => {
+    const ping = () => fetch(`${API_BASE}/api/healthz`, { method: "GET" }).catch(() => {});
+    ping();
+    const id = window.setInterval(ping, 9 * 60 * 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
   const { data: latestSession, isLoading: isLoadingSession } = useGetLatestExpirySession(
     setupData || { pdUserName: "", storeLocation: "", scanDate: "" },
     {
@@ -215,34 +222,58 @@ export default function Home() {
 
   const createScan = useCreateExpiryScan({
     mutation: {
-      onSuccess: () => {
+      onMutate: async (variables) => {
+        if (!sessionId) return;
+        await queryClient.cancelQueries({ queryKey: getListExpiryScansQueryKey(sessionId) });
+        const previousScans = queryClient.getQueryData(getListExpiryScansQueryKey(sessionId));
+
+        const expiryDate = new Date(String(variables.data.expiryDate));
+        const scanDate = new Date(String(variables.data.scanDate));
+        const msPerDay = 1000 * 60 * 60 * 24;
+        const daysLeft = Math.ceil((expiryDate.getTime() - new Date().setHours(0,0,0,0)) / msPerDay);
+        const status: "Expired" | "Urgent" | "Near Expiry" | "OK" =
+          daysLeft <= 0 ? "Expired" : daysLeft <= 7 ? "Urgent" : daysLeft <= 30 ? "Near Expiry" : "OK";
+
+        const optimisticScan = {
+          id: -Date.now(),
+          sessionId: variables.data.sessionId,
+          pdUserName: variables.data.pdUserName,
+          storeLocation: variables.data.storeLocation,
+          barcode: variables.data.barcode,
+          itemNumber: variables.data.itemNumber ?? null,
+          description: variables.data.description ?? null,
+          qty: variables.data.qty,
+          expiryDate,
+          status,
+          daysLeft,
+          scanDate,
+          actionRequired: null,
+          remarks: variables.data.remarks ?? null,
+          createdAt: new Date(),
+        };
+
+        queryClient.setQueryData(getListExpiryScansQueryKey(sessionId), (old: unknown) =>
+          Array.isArray(old) ? [optimisticScan, ...old] : [optimisticScan]
+        );
+
+        scanForm.reset({ barcode: "", itemNumber: "", description: "", qty: 1, expiryDate: "", remarks: "" });
+        setTimeout(() => { barcodeInputRef.current?.focus(); }, 50);
+        toast({ title: "Scan saved", description: "Item recorded." });
+
+        return { previousScans };
+      },
+      onError: (err, _vars, context: { previousScans?: unknown } | undefined) => {
+        if (sessionId && context?.previousScans !== undefined) {
+          queryClient.setQueryData(getListExpiryScansQueryKey(sessionId), context.previousScans);
+        }
+        toast({ title: "Failed to save scan", description: String(err), variant: "destructive" });
+      },
+      onSettled: () => {
         if (sessionId) {
           queryClient.invalidateQueries({ queryKey: getListExpiryScansQueryKey(sessionId) });
           queryClient.invalidateQueries({ queryKey: getGetExpirySessionSummaryQueryKey(sessionId) });
         }
-        toast({
-          title: "Scan added",
-          description: "Item recorded successfully.",
-        });
-        scanForm.reset({
-          barcode: "",
-          itemNumber: "",
-          description: "",
-          qty: 1,
-          expiryDate: "",
-          remarks: "",
-        });
-        setTimeout(() => {
-          barcodeInputRef.current?.focus();
-        }, 100);
       },
-      onError: (err) => {
-        toast({
-          title: "Failed to add scan",
-          description: String(err),
-          variant: "destructive",
-        });
-      }
     }
   });
 
