@@ -1,5 +1,4 @@
 import * as xlsx from 'xlsx';
-import ExcelJS from 'exceljs';
 
 export async function parseBarcodeMaster(file: File): Promise<any[]> {
   return new Promise((resolve, reject) => {
@@ -29,27 +28,29 @@ function parseDateOnly(value: unknown): Date | null {
   return new Date(year, month - 1, day);
 }
 
-const BORDER_THIN: Partial<ExcelJS.Borders> = {
-  top:    { style: 'thin', color: { argb: 'FFB0B0B0' } },
-  left:   { style: 'thin', color: { argb: 'FFB0B0B0' } },
-  bottom: { style: 'thin', color: { argb: 'FFB0B0B0' } },
-  right:  { style: 'thin', color: { argb: 'FFB0B0B0' } },
-};
-
-const HEADER_FILL: ExcelJS.Fill = {
-  type: 'pattern',
-  pattern: 'solid',
-  fgColor: { argb: 'FF1C1C1E' },
-};
-
 const STATUS_COLORS: Record<string, { fg: string; bg: string }> = {
-  Expired:     { fg: 'FFFFFFFF', bg: 'FFB91C1C' },
-  Urgent:      { fg: 'FFFFFFFF', bg: 'FFD97706' },
+  Expired:       { fg: 'FFFFFFFF', bg: 'FFB91C1C' },
+  Urgent:        { fg: 'FFFFFFFF', bg: 'FFD97706' },
   'Near Expiry': { fg: 'FF1A1A1A', bg: 'FFFBBF24' },
-  OK:          { fg: 'FFFFFFFF', bg: 'FF16A34A' },
+  OK:            { fg: 'FFFFFFFF', bg: 'FF16A34A' },
 };
 
 export async function exportToExcel(data: any[], filename: string) {
+  const ExcelJS = (await import('exceljs')).default;
+
+  const BORDER_THIN = {
+    top:    { style: 'thin' as const, color: { argb: 'FFB0B0B0' } },
+    left:   { style: 'thin' as const, color: { argb: 'FFB0B0B0' } },
+    bottom: { style: 'thin' as const, color: { argb: 'FFB0B0B0' } },
+    right:  { style: 'thin' as const, color: { argb: 'FFB0B0B0' } },
+  };
+
+  const HEADER_FILL = {
+    type: 'pattern' as const,
+    pattern: 'solid' as const,
+    fgColor: { argb: 'FF1C1C1E' },
+  };
+
   const workbook = new ExcelJS.Workbook();
   workbook.calcProperties.fullCalcOnLoad = true;
 
