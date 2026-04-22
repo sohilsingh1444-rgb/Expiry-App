@@ -113,12 +113,29 @@ function formatDateOnly(value?: string | Date | null) {
 
 const API_BASE = getApiBase();
 
+const SESSION_STORAGE_KEY = "expiry_scan_session";
+
+function loadPersistedSession(): { setupData: { pdUserName: string; storeLocation: string; scanDate: string }; sessionId: string } | null {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed?.setupData?.pdUserName && parsed?.setupData?.storeLocation && parsed?.setupData?.scanDate && parsed?.sessionId) {
+      return parsed;
+    }
+  } catch {}
+  return null;
+}
+
 export default function Home() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [isSetupComplete, setIsSetupComplete] = useState(false);
-  const [setupData, setSetupData] = useState<{pdUserName: string, storeLocation: string, scanDate: string} | null>(null);
-  const [newSessionId, setNewSessionId] = useState<string | null>(null);
+
+  const persisted = loadPersistedSession();
+
+  const [isSetupComplete, setIsSetupComplete] = useState(() => !!persisted);
+  const [setupData, setSetupData] = useState<{pdUserName: string, storeLocation: string, scanDate: string} | null>(() => persisted?.setupData ?? null);
+  const [newSessionId, setNewSessionId] = useState<string | null>(() => persisted?.sessionId ?? null);
   const [showNonExpiredOnly, setShowNonExpiredOnly] = useState(false);
   const [todayDateKey, setTodayDateKey] = useState(getTodayDateKey);
   const [thresholds, setThresholds] = useState({ urgentDays: 2, nearExpiryDays: 15 });
@@ -315,11 +332,13 @@ export default function Home() {
   });
 
   const onSetupSubmit = (values: z.infer<typeof setupSchema>) => {
+    const sid = `${values.storeLocation}_${values.pdUserName}_${values.scanDate}_${crypto.randomUUID().slice(0, 8)}`;
     setSetupData(values);
-    setNewSessionId(
-      `${values.storeLocation}_${values.pdUserName}_${values.scanDate}_${crypto.randomUUID().slice(0, 8)}`,
-    );
+    setNewSessionId(sid);
     setIsSetupComplete(true);
+    try {
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ setupData: values, sessionId: sid }));
+    } catch {}
   };
 
   const onScanSubmit = (values: z.infer<typeof scanSchema>) => {
@@ -445,6 +464,7 @@ export default function Home() {
         await fetch(`${API_BASE}/api/expiry-sessions/${sessionId}`, { method: "DELETE" });
         queryClient.invalidateQueries({ queryKey: getListExpiryScansQueryKey(sessionId) });
         queryClient.invalidateQueries({ queryKey: getGetExpirySessionSummaryQueryKey(sessionId) });
+        try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch {}
         toast({
           title: "Exported and cleared",
           description: "Excel downloaded. Session data removed from database to save space.",
