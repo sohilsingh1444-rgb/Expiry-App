@@ -36,17 +36,17 @@ export const ListExpiryScansParams = zod.object({
 });
 
 export const ListExpiryScansResponseItem = zod.object({
-  id: zod.number(),
+  id: zod.coerce.number(),
   sessionId: zod.string(),
   pdUserName: zod.string(),
   storeLocation: zod.string(),
   barcode: zod.string(),
   itemNumber: zod.string().nullish(),
   description: zod.string().nullish(),
-  qty: zod.number(),
+  qty: zod.coerce.number(),
   expiryDate: zod.coerce.date(),
   status: zod.enum(["Expired", "Urgent", "Near Expiry", "OK"]),
-  daysLeft: zod.number(),
+  daysLeft: zod.coerce.number(),
   scanDate: zod.coerce.date(),
   actionRequired: zod.string().nullish(),
   remarks: zod.string().nullish(),

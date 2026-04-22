@@ -165,40 +165,44 @@ router.get("/expiry-sessions/:sessionId/summary", async (req, res): Promise<void
   res.json(GetExpirySessionSummaryResponse.parse(summary));
 });
 
-router.post("/expiry-scans", async (req, res): Promise<void> => {
-  const parsed = CreateExpiryScanBody.safeParse(req.body);
+router.post("/expiry-scans", async (req, res, next): Promise<void> => {
+  try {
+    const parsed = CreateExpiryScanBody.safeParse(req.body);
 
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+
+    const body = parsed.data;
+    const today = dateOnlyToUtc(toDateOnly(new Date()));
+    const expiryDate = dateOnlyToUtc(toDateOnly(body.expiryDate));
+    const scanDate = dateOnlyToUtc(toDateOnly(body.scanDate));
+    const status = calculateStatus(expiryDate, today);
+
+    const [row] = await db
+      .insert(expiryScansTable)
+      .values({
+        sessionId: body.sessionId,
+        pdUserName: body.pdUserName,
+        storeLocation: body.storeLocation,
+        barcode: body.barcode,
+        itemNumber: body.itemNumber ?? null,
+        description: body.description ?? null,
+        qty: body.qty,
+        expiryDate: toDateOnly(expiryDate),
+        status: status.status,
+        daysLeft: status.daysLeft,
+        scanDate: toDateOnly(scanDate),
+        actionRequired: status.actionRequired,
+        remarks: body.remarks ?? null,
+      })
+      .returning();
+
+    res.status(201).json(ListExpiryScansResponseItem.parse(row));
+  } catch (err) {
+    next(err);
   }
-
-  const body = parsed.data;
-  const today = dateOnlyToUtc(toDateOnly(new Date()));
-  const expiryDate = dateOnlyToUtc(toDateOnly(body.expiryDate));
-  const scanDate = dateOnlyToUtc(toDateOnly(body.scanDate));
-  const status = calculateStatus(expiryDate, today);
-
-  const [row] = await db
-    .insert(expiryScansTable)
-    .values({
-      sessionId: body.sessionId,
-      pdUserName: body.pdUserName,
-      storeLocation: body.storeLocation,
-      barcode: body.barcode,
-      itemNumber: body.itemNumber ?? null,
-      description: body.description ?? null,
-      qty: body.qty,
-      expiryDate: toDateOnly(expiryDate),
-      status: status.status,
-      daysLeft: status.daysLeft,
-      scanDate: toDateOnly(scanDate),
-      actionRequired: status.actionRequired,
-      remarks: body.remarks ?? null,
-    })
-    .returning();
-
-  res.status(201).json(ListExpiryScansResponseItem.parse(row));
 });
 
 router.delete("/expiry-sessions/:sessionId", async (req, res): Promise<void> => {
