@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: expiry-scan-api
+    runtime: node
+    plan: free
+    buildCommand: npm install -g pnpm && pnpm install --no-frozen-lockfile && pnpm --filter @workspace/api-server run build
+    startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_DATABASE_URL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
