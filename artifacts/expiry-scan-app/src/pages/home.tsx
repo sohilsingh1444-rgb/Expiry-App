@@ -340,7 +340,8 @@ export default function Home() {
   };
 
   const scansWithCurrentDays = useMemo(() => {
-    return scans.map((scan) => {
+    const items = Array.isArray(scans) ? scans : [];
+    return items.map((scan) => {
       const current = calculateStatusAndDays(formatDateOnly(scan.expiryDate), todayDateKey, thresholds.urgentDays, thresholds.nearExpiryDays);
 
       return {
