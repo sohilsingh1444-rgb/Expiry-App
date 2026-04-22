@@ -1,8 +1,14 @@
 {
-  "buildCommand": "npm install -g pnpm && pnpm install && pnpm --filter @workspace/expiry-scan-app run build",
+  "buildCommand": "npm install -g pnpm && pnpm install && pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/expiry-scan-app run build",
   "outputDirectory": "artifacts/expiry-scan-app/dist/public",
   "installCommand": "echo 'install handled in buildCommand'",
+  "functions": {
+    "api/[...path].js": {
+      "includeFiles": "artifacts/api-server/dist/vercel.cjs",
+      "maxDuration": 30
+    }
+  },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api(?:/|$)).*)", "destination": "/index.html" }
   ]
 }
