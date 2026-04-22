@@ -34,8 +34,11 @@ app.use("/api", router);
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   const message = err instanceof Error ? err.message : String(err);
   const stack = err instanceof Error ? err.stack : undefined;
+  const cause = err instanceof Error && err.cause instanceof Error
+    ? { message: err.cause.message, code: (err.cause as NodeJS.ErrnoException).code }
+    : undefined;
   logger.error({ err }, "Unhandled route error");
-  res.status(500).json({ error: message, stack });
+  res.status(500).json({ error: message, cause, stack });
 });
 
 export default app;
