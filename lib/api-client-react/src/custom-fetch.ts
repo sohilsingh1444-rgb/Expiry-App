@@ -349,8 +349,6 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  // Attach bearer token when an auth getter is configured and no
-  // Authorization header has been explicitly provided.
   if (_authTokenGetter && !headers.has("authorization")) {
     const token = await _authTokenGetter();
     if (token) {
@@ -360,7 +358,13 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  let response = await fetch(input, { ...init, method, headers });
+
+  // Retry once on server errors (e.g. cold-start DB connection timeout)
+  if (response.status >= 500 && (method === "POST" || method === "PUT" || method === "PATCH" || method === "GET")) {
+    await new Promise((r) => setTimeout(r, 1500));
+    response = await fetch(input, { ...init, method, headers });
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
