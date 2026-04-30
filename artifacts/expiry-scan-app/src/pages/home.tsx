@@ -57,7 +57,7 @@ const scanSchema = z.object({
   barcode: z.string().min(1, "Barcode is required"),
   itemNumber: z.string().optional(),
   description: z.string().optional(),
-  qty: z.coerce.number().min(0.01, "Qty must be greater than 0"),
+  qty: z.coerce.number({ invalid_type_error: "Qty is required" }).min(0.01, "Qty must be greater than 0"),
   expiryDate: z.string().min(1, "Expiry Date is required"),
   remarks: z.string().optional(),
 });
@@ -170,7 +170,7 @@ export default function Home() {
       barcode: "",
       itemNumber: "",
       description: "",
-      qty: 1,
+      qty: "" as unknown as number,
       expiryDate: "",
       remarks: "",
     },
@@ -351,7 +351,7 @@ export default function Home() {
           Array.isArray(old) ? [optimisticScan, ...old] : [optimisticScan]
         );
 
-        scanForm.reset({ barcode: "", itemNumber: "", description: "", qty: 1, expiryDate: "", remarks: "" });
+        scanForm.reset({ barcode: "", itemNumber: "", description: "", qty: "" as unknown as number, expiryDate: "", remarks: "" });
         setTimeout(() => { barcodeInputRef.current?.focus(); }, 50);
         toast({ title: "Scan saved", description: "Item recorded." });
 
@@ -809,7 +809,7 @@ export default function Home() {
                         <FormItem>
                           <FormLabel className="text-zinc-700">Qty</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.01" min="0.01" {...field} className="bg-zinc-50 border-zinc-200 font-mono" />
+                            <Input type="number" step="0.01" min="0.01" placeholder="" {...field} value={field.value === 0 ? "" : field.value} className="bg-zinc-50 border-zinc-200 font-mono" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
