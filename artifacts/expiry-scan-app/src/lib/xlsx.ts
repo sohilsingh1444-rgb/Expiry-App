@@ -34,7 +34,7 @@ const STATUS_COLORS: Record<string, { fg: string; bg: string }> = {
   OK:            { fg: 'FFFFFFFF', bg: 'FF16A34A' },
 };
 
-export async function exportToExcel(data: any[], filename: string) {
+export async function exportToExcel(data: any[], filename: string): Promise<string | null> {
   const ExcelJS = (await import('exceljs')).default;
 
   const BORDER_THIN = {
@@ -58,7 +58,7 @@ export async function exportToExcel(data: any[], filename: string) {
   if (data.length === 0) {
     const buf = await workbook.xlsx.writeBuffer();
     downloadBuffer(buf, filename);
-    return;
+    return null;
   }
 
   const headers = Object.keys(data[0]);
@@ -162,6 +162,12 @@ export async function exportToExcel(data: any[], filename: string) {
 
   const buf = await workbook.xlsx.writeBuffer();
   downloadBuffer(buf, filename);
+
+  // Return base64 for email attachment
+  const bytes = new Uint8Array(buf as ArrayBuffer);
+  let binary = '';
+  bytes.forEach(b => { binary += String.fromCharCode(b); });
+  return btoa(binary);
 }
 
 function downloadBuffer(buf: ArrayBuffer | Buffer, filename: string) {

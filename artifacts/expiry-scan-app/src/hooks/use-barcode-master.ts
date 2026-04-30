@@ -4,6 +4,9 @@ export type BarcodeMasterRow = {
   barcode: string;
   itemNumber: string;
   description: string;
+  rrp?: string;
+  special?: string;
+  soh?: string;
 };
 
 const STORAGE_KEY = 'expiry-scan-barcode-master';
@@ -30,23 +33,24 @@ export function useBarcodeMaster() {
   const saveMasterData = (rows: any[]) => {
     const map = new Map<string, BarcodeMasterRow>();
     rows.forEach(row => {
-      // Find keys that might match barcode, item number, description (case insensitive)
       const keys = Object.keys(row);
       const getVal = (possibleNames: string[]) => {
-        const key = keys.find(k => possibleNames.some(pn => k.toLowerCase().includes(pn)));
-        return key ? row[key] : '';
+        const key = keys.find(k => possibleNames.some(pn => k.toLowerCase().replace(/[\s_]/g, '').includes(pn.toLowerCase().replace(/[\s_]/g, ''))));
+        return key ? String(row[key] ?? '').trim() : '';
       };
 
       let rawBarcode = getVal(['barcode', 'upc', 'ean', 'gtin']) || row['Barcode'] || row['barcode'];
-      let itemNumber = getVal(['item', 'sku', 'article']) || row['ItemNumber'] || row['itemNumber'];
+      let itemNumber = getVal(['itemno', 'item', 'sku', 'article']) || row['ItemNumber'] || row['itemNumber'];
       let description = getVal(['desc', 'name', 'product']) || row['Description'] || row['description'];
+      let rrp = getVal(['rrp', 'retailprice', 'retail']);
+      let special = getVal(['special', 'specialprice', 'promo', 'sale']);
+      let soh = getVal(['soh', 'stockonhand', 'stock', 'onhand', 'qty', 'quantity']);
 
       if (!rawBarcode && Object.values(row).length > 0) {
-         // fallback: first column is barcode, second is item, third is desc
-         const vals = Object.values(row);
-         rawBarcode = vals[0];
-         itemNumber = vals[1] || '';
-         description = vals[2] || '';
+        const vals = Object.values(row);
+        rawBarcode = vals[0];
+        itemNumber = String(vals[1] || '');
+        description = String(vals[2] || '');
       }
 
       if (rawBarcode) {
@@ -57,7 +61,10 @@ export function useBarcodeMaster() {
         map.set(barcodeStr, {
           barcode: barcodeStr,
           itemNumber: String(itemNumber || '').trim(),
-          description: String(description || '').trim()
+          description: String(description || '').trim(),
+          rrp: rrp || undefined,
+          special: special || undefined,
+          soh: soh || undefined,
         });
       }
     });

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { format, differenceInDays, parseISO } from "date-fns";
+import type { BarcodeMasterRow } from "@/hooks/use-barcode-master";
 import {
   useGetLatestExpirySession,
   getGetLatestExpirySessionQueryKey,
@@ -139,6 +140,8 @@ export default function Home() {
   const [showNonExpiredOnly, setShowNonExpiredOnly] = useState(false);
   const [todayDateKey, setTodayDateKey] = useState(getTodayDateKey);
   const [thresholds, setThresholds] = useState({ urgentDays: 2, nearExpiryDays: 15 });
+  const [matchedItem, setMatchedItem] = useState<BarcodeMasterRow | null>(null);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const { masterData, isLoaded, saveMasterData, clearMasterData, lookupBarcode } = useBarcodeMaster();
@@ -194,13 +197,18 @@ export default function Home() {
     if (watchBarcode && watchBarcode.length > 3) {
       const match = lookupBarcode(watchBarcode);
       if (match) {
+        setMatchedItem(match);
         if (!scanForm.getValues("itemNumber")) {
           scanForm.setValue("itemNumber", match.itemNumber);
         }
         if (!scanForm.getValues("description")) {
           scanForm.setValue("description", match.description);
         }
+      } else {
+        setMatchedItem(null);
       }
+    } else {
+      setMatchedItem(null);
     }
   }, [watchBarcode, lookupBarcode, scanForm]);
 
@@ -443,21 +451,67 @@ export default function Home() {
 
   const handleExport = async () => {
     if (!visibleScans.length) return;
-    const exportData = visibleScans.map(s => ({
-      "PD User Name": s.pdUserName,
-      "Store Location": s.storeLocation,
-      "Barcode": s.barcode,
-      "Item Number": s.itemNumber,
-      "Description": s.description,
-      "Qty": s.qty,
-      "Expiry Date": formatDateOnly(s.expiryDate),
-      "Status": s.status,
-      "Days Left": s.daysLeft,
-      "Scan Date": formatDateOnly(s.scanDate),
-      "Action Required": s.actionRequired,
-      "Remarks": s.remarks,
-    }));
-    await exportToExcel(exportData, `Expiry_Scans_${setupData?.storeLocation || 'Export'}_${format(new Date(), 'yyyyMMdd_HHmm')}`);
+
+    const exportData = visibleScans.map(s => {
+      const masterRow = lookupBarcode(s.barcode || "");
+      return {
+        "PD User Name": s.pdUserName,
+        "Store Location": s.storeLocation,
+        "Barcode": s.barcode,
+        "Item Number": s.itemNumber,
+        "Description": s.description,
+        "RRP": masterRow?.rrp ?? "",
+        "Special": masterRow?.special ?? "",
+        "Store SOH": masterRow?.soh ?? "",
+        "Qty": s.qty,
+        "Expiry Date": formatDateOnly(s.expiryDate),
+        "Status": s.status,
+        "Days Left": s.daysLeft,
+        "Scan Date": formatDateOnly(s.scanDate),
+        "Action Required": s.actionRequired,
+        "Remarks": s.remarks,
+      };
+    });
+
+    const filename = `Expiry_Scans_${setupData?.storeLocation || 'Export'}_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`;
+    const fileBase64 = await exportToExcel(exportData, filename.replace(".xlsx", ""));
+
+    // Send email to store if configured
+    if (fileBase64 && setupData?.storeLocation) {
+      setIsSendingEmail(true);
+      try {
+        const emailRes = await fetch(`${API_BASE}/api/email/send-export`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeLocation: setupData.storeLocation,
+            pdUserName: setupData.pdUserName,
+            scanDate: setupData.scanDate,
+            filename,
+            fileBase64,
+          }),
+        });
+        const emailData = await emailRes.json();
+        if (emailRes.ok && emailData.sent) {
+          toast({
+            title: "Email sent",
+            description: `Report emailed to ${emailData.to.join(", ")}`,
+          });
+        } else if (emailRes.status === 503) {
+          // Email not configured — silently skip
+        } else if (emailRes.status === 404) {
+          toast({
+            title: "No email for this store",
+            description: `No email address is set up for ${setupData.storeLocation}. Report was still downloaded.`,
+            variant: "destructive",
+          });
+        }
+      } catch {
+        // Email failure is non-critical — download already succeeded
+      } finally {
+        setIsSendingEmail(false);
+      }
+    }
 
     if (sessionId) {
       try {
@@ -637,6 +691,33 @@ export default function Home() {
                     )}
                   />
                   
+                  {/* Matched item info panel */}
+                  {matchedItem && (matchedItem.rrp || matchedItem.special || matchedItem.soh) && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-1.5 text-sm">
+                      <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Master Data</div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        {matchedItem.rrp && (
+                          <div className="bg-white rounded-md border border-amber-100 px-2 py-1.5">
+                            <div className="text-xs text-zinc-500">RRP</div>
+                            <div className="font-bold text-zinc-900">${matchedItem.rrp}</div>
+                          </div>
+                        )}
+                        {matchedItem.special && (
+                          <div className="bg-white rounded-md border border-green-100 px-2 py-1.5">
+                            <div className="text-xs text-zinc-500">Special</div>
+                            <div className="font-bold text-green-700">${matchedItem.special}</div>
+                          </div>
+                        )}
+                        {matchedItem.soh && (
+                          <div className="bg-white rounded-md border border-blue-100 px-2 py-1.5">
+                            <div className="text-xs text-zinc-500">Store SOH</div>
+                            <div className="font-bold text-blue-700">{matchedItem.soh}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={scanForm.control}
@@ -817,9 +898,9 @@ export default function Home() {
                     Hide Expired
                   </Label>
                 </div>
-                <Button onClick={handleExport} size="sm" variant="outline" className="border-zinc-300 font-medium" disabled={visibleScans.length === 0}>
+                <Button onClick={handleExport} size="sm" variant="outline" className="border-zinc-300 font-medium" disabled={visibleScans.length === 0 || isSendingEmail}>
                   <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />
-                  Export
+                  {isSendingEmail ? "Sending..." : "Export"}
                 </Button>
                 <Button
                   onClick={handleClearAll}
