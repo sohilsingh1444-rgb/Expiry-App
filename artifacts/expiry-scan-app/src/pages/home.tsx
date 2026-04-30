@@ -178,7 +178,6 @@ export default function Home() {
 
   const watchBarcode = scanForm.watch("barcode");
   const watchExpiryDate = scanForm.watch("expiryDate");
-  const watchQty = scanForm.watch("qty");
 
   useEffect(() => {
     const refreshToday = () => {
@@ -338,7 +337,7 @@ export default function Home() {
           barcode: variables.data.barcode,
           itemNumber: variables.data.itemNumber ?? null,
           description: variables.data.description ?? null,
-          qty: variables.data.qty,
+          qty: variables.data.qty ?? 1,
           expiryDate,
           status,
           daysLeft,
@@ -637,7 +636,7 @@ export default function Home() {
           <CardHeader className="space-y-1 bg-zinc-950 text-zinc-50 rounded-t-xl pb-6">
             <div className="flex items-center gap-2 mb-2">
               <ScanLine className="w-6 h-6 text-amber-500" />
-              <CardTitle className="text-2xl font-bold tracking-tight">Expiry Scan</CardTitle>
+              <CardTitle className="text-2xl font-bold tracking-tight">Expiry Tracker</CardTitle>
             </div>
             <CardDescription className="text-zinc-400">
               Start a new scanning session for your location.
@@ -703,7 +702,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ScanLine className="w-5 h-5 text-amber-500" />
-            <h1 className="text-xl font-bold tracking-tight hidden sm:block">Expiry Scan</h1>
+            <h1 className="text-xl font-bold tracking-tight hidden sm:block">Expiry Tracker</h1>
           </div>
           <div className="flex items-center gap-4 text-sm font-medium text-zinc-300">
             <div className="flex items-center gap-1.5 bg-zinc-900 px-3 py-1.5 rounded-md border border-zinc-800">
@@ -810,7 +809,7 @@ export default function Home() {
                         <FormItem>
                           <FormLabel className="text-zinc-700">Qty</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.01" {...field} className="bg-zinc-50 border-zinc-200 font-mono" />
+                            <Input type="number" step="0.01" min="0.01" {...field} className="bg-zinc-50 border-zinc-200 font-mono" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

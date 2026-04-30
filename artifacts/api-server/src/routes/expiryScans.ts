@@ -189,7 +189,7 @@ router.post("/expiry-scans", async (req, res, next): Promise<void> => {
         barcode: body.barcode,
         itemNumber: body.itemNumber ?? null,
         description: body.description ?? null,
-        qty: body.qty,
+        qty: body.qty ?? 1,
         expiryDate: toDateOnly(expiryDate),
         status: status.status,
         daysLeft: status.daysLeft,

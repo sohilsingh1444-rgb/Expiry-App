@@ -2,6 +2,13 @@ import { createInsertSchema } from "drizzle-zod";
 import { date, doublePrecision, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { z } from "zod/v4";
 
+export const storesTable = pgTable("stores", {
+  code: text("code").primaryKey(),
+  name: text("name").notNull(),
+  emails: text("emails").array().notNull().default([]),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const appSettingsTable = pgTable("app_settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
