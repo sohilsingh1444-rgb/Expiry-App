@@ -60,12 +60,21 @@ const scanSchema = z.object({
   itemNumber: z.string().optional(),
   description: z.string().optional(),
   qty: z.coerce.number({ invalid_type_error: "Qty is required" }).min(0.01, "Qty must be greater than 0"),
-  expiryDate: z.string().min(1, "Expiry Date is required"),
+  expiryDate: z.string().optional(),
   remarks: z.string().optional(),
   wrongRrp: z.boolean().default(false),
   missingSpecialTicket: z.boolean().default(false),
   notOnDisplay: z.boolean().default(false),
   bulkPullQty: z.coerce.number().min(0.01).optional(),
+}).superRefine((data, ctx) => {
+  const hasComplianceFlag = data.wrongRrp || data.missingSpecialTicket || data.notOnDisplay;
+  if (!hasComplianceFlag && !data.expiryDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Expiry Date is required",
+      path: ["expiryDate"],
+    });
+  }
 });
 
 function getTodayDateKey() {
@@ -390,7 +399,7 @@ export default function Home() {
         itemNumber: values.itemNumber,
         description: values.description,
         qty: values.qty,
-        expiryDate: values.expiryDate,
+        expiryDate: values.expiryDate || setupData.scanDate,
         remarks: values.remarks,
         ...(matchedItem?.rrp ? { rrp: parseFloat(String(matchedItem.rrp)) } : {}),
         ...(matchedItem?.special ? { specialPrice: parseFloat(String(matchedItem.special)) } : {}),
