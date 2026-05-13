@@ -49,7 +49,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -660,13 +662,21 @@ export default function Home() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {STORES.map(store => (
-                            <SelectItem key={store.code} value={store.code}>
-                              <span className="font-medium">{store.name}</span>
-                              <span className="ml-2 text-xs text-zinc-400 font-mono">{store.code}</span>
-                              <span className="ml-1 text-xs text-zinc-400">[{store.region}]</span>
-                            </SelectItem>
-                          ))}
+                          {(["WR", "CR", "NR"] as const).map(region => {
+                            const regionStores = STORES.filter(s => s.region === region);
+                            const regionLabel = region === "WR" ? "Western Region (WR)" : region === "CR" ? "Central Region (CR)" : "Northern Region (NR)";
+                            return (
+                              <SelectGroup key={region}>
+                                <SelectLabel className="text-xs font-bold uppercase tracking-wider text-zinc-500 px-2 py-1.5">{regionLabel}</SelectLabel>
+                                {regionStores.map(store => (
+                                  <SelectItem key={store.code} value={store.code}>
+                                    <span className="font-medium">{store.name}</span>
+                                    <span className="ml-2 text-xs text-zinc-400 font-mono">{store.code}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                       <FormMessage />
