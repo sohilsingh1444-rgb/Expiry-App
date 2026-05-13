@@ -558,7 +558,7 @@ export default function Home() {
         } else if (emailRes.status === 404) {
           toast({
             title: "No email for this store",
-            description: `No email address is set up for ${setupData.storeLocation}. Report was still downloaded.`,
+            description: `No email address is set up for ${setupData.storeLocation}. Add one in the Admin panel.`,
             variant: "destructive",
           });
         }
@@ -577,7 +577,7 @@ export default function Home() {
         try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch {}
         toast({
           title: "Exported and cleared",
-          description: "Excel downloaded. Session data removed from database to save space.",
+          description: "Report emailed. Session data cleared.",
         });
       } catch {
         // Silent — export already succeeded, cleanup failure is non-critical

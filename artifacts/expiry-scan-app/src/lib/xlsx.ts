@@ -308,7 +308,6 @@ export async function exportToExcel(allScans: any[], filename: string): Promise<
   );
 
   const buf = await workbook.xlsx.writeBuffer() as ArrayBuffer;
-  downloadBuffer(buf, filename);
 
   const bytes = new Uint8Array(buf);
   let binary = '';
