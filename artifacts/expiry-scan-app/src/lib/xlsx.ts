@@ -212,11 +212,6 @@ async function addExpirySheet(workbook: any, sheetName: string, data: any[]) {
     excelRow.height = 18;
   });
 
-  await sheet.protect('', {
-    selectLockedCells: true, selectUnlockedCells: true,
-    formatCells: true, formatColumns: true, formatRows: true,
-    insertRows: false, deleteRows: false, sort: true, autoFilter: true,
-  });
 
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: data.length + 1, column: cols.length } };
   sheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
