@@ -27,7 +27,7 @@ const DEFAULT_STORES: Array<{ code: string; name: string; region: string; emails
   { code: "S0020", name: "Newworld Narere",       region: "CR", emails: [] },
   { code: "S0026", name: "Newworld VitiPlaza",    region: "CR", emails: [] },
   { code: "S0021", name: "Newworld Nausori",      region: "CR", emails: [] },
-  { code: "S0029", name: "IGA Damodhar",          region: "CR", emails: [] },
+  { code: "S0029", name: "IGA Damodar",           region: "CR", emails: [] },
   { code: "S0033", name: "IGA Greig St",          region: "CR", emails: [] },
   { code: "S0032", name: "Central Bakery",        region: "CR", emails: [] },
   { code: "B0003", name: "Vatuwaqa Warehouse",    region: "CR", emails: [] },
