@@ -197,7 +197,7 @@ router.post("/admin/stores", async (req, res): Promise<void> => {
       .values({ code: code.toUpperCase().trim(), name: name.trim(), region: regionVal, emails })
       .returning();
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = `${err instanceof Error ? err.message : ""} ${String(err)}`;
     if (msg.includes("duplicate key") || msg.includes("unique constraint")) {
       res.status(409).json({ error: `Store code "${code.toUpperCase().trim()}" already exists. Use Edit to update it.` });
       return;
