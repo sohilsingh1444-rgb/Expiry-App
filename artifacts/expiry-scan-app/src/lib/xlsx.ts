@@ -159,6 +159,7 @@ async function addExpirySheet(workbook: any, sheetName: string, data: any[]) {
     cell.font = { bold: true, color: { argb: 'FFFBBF24' }, size: 11 };
     cell.alignment = { vertical: 'middle', horizontal: 'center' };
     cell.border = BORDER_THIN;
+    cell.protection = { locked: true };
   });
   headerRow.height = 22;
 
@@ -212,6 +213,21 @@ async function addExpirySheet(workbook: any, sheetName: string, data: any[]) {
     excelRow.height = 18;
   });
 
+  await sheet.protect('', {
+    selectLockedCells: true,
+    selectUnlockedCells: true,
+    formatCells: true,
+    formatColumns: true,
+    formatRows: true,
+    insertRows: true,
+    insertColumns: true,
+    insertHyperlinks: true,
+    deleteRows: true,
+    deleteColumns: true,
+    sort: true,
+    autoFilter: true,
+    pivotTables: true,
+  });
 
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: data.length + 1, column: cols.length } };
   sheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
