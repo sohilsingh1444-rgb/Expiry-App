@@ -56,6 +56,9 @@ async function buildAll() {
     ],
   });
 
+  const vercelExternal = sharedOptions.external.filter(
+    (e) => e !== "nodemailer" && e !== "handlebars"
+  );
   await esbuild({
     entryPoints: [path.resolve(artifactDir, "src/vercel.ts")],
     platform: "node",
@@ -64,7 +67,7 @@ async function buildAll() {
     outfile: path.resolve(distDir, "vercel.cjs"),
     logLevel: "info",
     define: { "process.env.NODE_ENV": '"production"' },
-    external: sharedOptions.external,
+    external: vercelExternal,
   });
 }
 
