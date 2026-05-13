@@ -50,6 +50,13 @@ export const ListExpiryScansResponseItem = zod.object({
   scanDate: zod.coerce.date(),
   actionRequired: zod.string().nullish(),
   remarks: zod.string().nullish(),
+  rrp: zod.number().nullish(),
+  specialPrice: zod.number().nullish(),
+  systemSoh: zod.number().nullish(),
+  wrongRrp: zod.boolean().optional(),
+  missingSpecialTicket: zod.boolean().optional(),
+  notOnDisplay: zod.boolean().optional(),
+  bulkPullQty: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 export const ListExpiryScansResponse = zod.array(ListExpiryScansResponseItem);
@@ -86,6 +93,13 @@ export const CreateExpiryScanBody = zod.object({
   expiryDate: zod.coerce.date(),
   scanDate: zod.coerce.date(),
   remarks: zod.string().nullish(),
+  rrp: zod.number().nullish(),
+  specialPrice: zod.number().nullish(),
+  systemSoh: zod.number().nullish(),
+  wrongRrp: zod.boolean().optional(),
+  missingSpecialTicket: zod.boolean().optional(),
+  notOnDisplay: zod.boolean().optional(),
+  bulkPullQty: zod.number().nullish(),
 });
 
 /**

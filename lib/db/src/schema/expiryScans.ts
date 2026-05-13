@@ -1,5 +1,5 @@
 import { createInsertSchema } from "drizzle-zod";
-import { date, doublePrecision, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, date, doublePrecision, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { z } from "zod/v4";
 
 export const storesTable = pgTable("stores", {
@@ -24,6 +24,13 @@ export const expiryScansTable = pgTable("expiry_scans", {
   itemNumber: text("item_number"),
   description: text("description"),
   qty: doublePrecision("qty").notNull(),
+  rrp: doublePrecision("rrp"),
+  specialPrice: doublePrecision("special_price"),
+  systemSoh: doublePrecision("system_soh"),
+  wrongRrp: boolean("wrong_rrp").notNull().default(false),
+  missingSpecialTicket: boolean("missing_special_ticket").notNull().default(false),
+  notOnDisplay: boolean("not_on_display").notNull().default(false),
+  bulkPullQty: doublePrecision("bulk_pull_qty"),
   expiryDate: date("expiry_date").notNull(),
   status: text("status").notNull(),
   daysLeft: integer("days_left").notNull(),

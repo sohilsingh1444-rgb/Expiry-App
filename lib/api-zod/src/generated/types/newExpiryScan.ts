@@ -18,4 +18,11 @@ export interface NewExpiryScan {
   expiryDate: Date;
   scanDate: Date;
   remarks?: string | null;
+  rrp?: number | null;
+  specialPrice?: number | null;
+  systemSoh?: number | null;
+  wrongRrp?: boolean;
+  missingSpecialTicket?: boolean;
+  notOnDisplay?: boolean;
+  bulkPullQty?: number | null;
 }

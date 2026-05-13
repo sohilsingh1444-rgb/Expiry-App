@@ -41,9 +41,11 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { AlertCircle, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight } from "lucide-react";
-import { parseBarcodeMaster, exportToExcel } from "@/lib/xlsx";
+import { AlertCircle, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight, Database } from "lucide-react";
+import { parseBarcodeMaster, parseSohFile, exportToExcel } from "@/lib/xlsx";
 import { useBarcodeMaster } from "@/hooks/use-barcode-master";
+import { useSohData } from "@/hooks/use-soh-data";
+import { Checkbox } from "@/components/ui/checkbox";
 import { getApiBase } from "@/lib/api-base";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -60,6 +62,10 @@ const scanSchema = z.object({
   qty: z.coerce.number({ invalid_type_error: "Qty is required" }).min(0.01, "Qty must be greater than 0"),
   expiryDate: z.string().min(1, "Expiry Date is required"),
   remarks: z.string().optional(),
+  wrongRrp: z.boolean().default(false),
+  missingSpecialTicket: z.boolean().default(false),
+  notOnDisplay: z.boolean().default(false),
+  bulkPullQty: z.coerce.number().min(0.01).optional(),
 });
 
 function getTodayDateKey() {
@@ -145,6 +151,7 @@ export default function Home() {
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const { masterData, isLoaded, saveMasterData, clearMasterData, lookupBarcode } = useBarcodeMaster();
+  const { sohData, saveSohData, clearSohData, lookupSoh } = useSohData();
 
   const setupForm = useForm<z.infer<typeof setupSchema>>({
     resolver: zodResolver(setupSchema),
@@ -164,11 +171,16 @@ export default function Home() {
       qty: "" as unknown as number,
       expiryDate: "",
       remarks: "",
+      wrongRrp: false,
+      missingSpecialTicket: false,
+      notOnDisplay: false,
+      bulkPullQty: undefined,
     },
   });
 
   const watchBarcode = scanForm.watch("barcode");
   const watchExpiryDate = scanForm.watch("expiryDate");
+  const watchNotOnDisplay = scanForm.watch("notOnDisplay");
 
   useEffect(() => {
     const refreshToday = () => {
@@ -268,6 +280,13 @@ export default function Home() {
           itemNumber: variables.data.itemNumber ?? null,
           description: variables.data.description ?? null,
           qty: variables.data.qty ?? 1,
+          rrp: (variables.data as any).rrp ?? null,
+          specialPrice: (variables.data as any).specialPrice ?? null,
+          systemSoh: (variables.data as any).systemSoh ?? null,
+          wrongRrp: (variables.data as any).wrongRrp ?? false,
+          missingSpecialTicket: (variables.data as any).missingSpecialTicket ?? false,
+          notOnDisplay: (variables.data as any).notOnDisplay ?? false,
+          bulkPullQty: (variables.data as any).bulkPullQty ?? null,
           expiryDate,
           status,
           daysLeft,
@@ -281,7 +300,7 @@ export default function Home() {
           Array.isArray(old) ? [optimisticScan, ...old] : [optimisticScan]
         );
 
-        scanForm.reset({ barcode: "", itemNumber: "", description: "", qty: "" as unknown as number, expiryDate: "", remarks: "" });
+        scanForm.reset({ barcode: "", itemNumber: "", description: "", qty: "" as unknown as number, expiryDate: "", remarks: "", wrongRrp: false, missingSpecialTicket: false, notOnDisplay: false, bulkPullQty: undefined });
         setTimeout(() => { barcodeInputRef.current?.focus(); }, 50);
         toast({ title: "Scan saved", description: "Item recorded." });
 
@@ -373,7 +392,14 @@ export default function Home() {
         qty: values.qty,
         expiryDate: values.expiryDate,
         remarks: values.remarks,
-      }
+        ...(matchedItem?.rrp ? { rrp: parseFloat(String(matchedItem.rrp)) } : {}),
+        ...(matchedItem?.special ? { specialPrice: parseFloat(String(matchedItem.special)) } : {}),
+        ...(lookupSoh(barcodeStr) != null ? { systemSoh: lookupSoh(barcodeStr)! } : {}),
+        wrongRrp: values.wrongRrp,
+        missingSpecialTicket: values.missingSpecialTicket,
+        notOnDisplay: values.notOnDisplay,
+        ...(values.bulkPullQty != null ? { bulkPullQty: values.bulkPullQty } : {}),
+      } as any
     });
   };
 
@@ -393,6 +419,22 @@ export default function Home() {
         description: "Failed to parse the Excel file.",
         variant: "destructive",
       });
+    }
+    e.target.value = "";
+  };
+
+  const handleSohFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await parseSohFile(file);
+      saveSohData(data);
+      toast({
+        title: "SOH Data Uploaded",
+        description: `Loaded ${data.length} items from SOH file.`,
+      });
+    } catch {
+      toast({ title: "Upload Failed", description: "Failed to parse the SOH file.", variant: "destructive" });
     }
     e.target.value = "";
   };
@@ -452,26 +494,27 @@ export default function Home() {
   const handleExport = async () => {
     if (!visibleScans.length) return;
 
-    const exportData = visibleScans.map(s => {
-      const masterRow = lookupBarcode(s.barcode || "");
-      return {
-        "PD User Name": s.pdUserName,
-        "Store Location": s.storeLocation,
-        "Barcode": s.barcode,
-        "Item Number": s.itemNumber,
-        "Description": s.description,
-        "RRP": masterRow?.rrp ?? "",
-        "Special": masterRow?.special ?? "",
-        "Store SOH": masterRow?.soh ?? "",
-        "Qty": s.qty,
-        "Expiry Date": formatDateOnly(s.expiryDate),
-        "Status": s.status,
-        "Days Left": s.daysLeft,
-        "Scan Date": formatDateOnly(s.scanDate),
-        "Action Required": s.actionRequired,
-        "Remarks": s.remarks,
-      };
-    });
+    const exportData = scansWithCurrentDays.map(s => ({
+      "PD User Name": s.pdUserName,
+      "Store Location": s.storeLocation,
+      "Barcode": s.barcode,
+      "Item Number": s.itemNumber,
+      "Description": s.description,
+      "RRP": (s as any).rrp ?? null,
+      "Special Price": (s as any).specialPrice ?? null,
+      "System SOH": (s as any).systemSoh ?? null,
+      "Bulk Pull Qty": (s as any).bulkPullQty ?? null,
+      "Qty": s.qty,
+      "Expiry Date": formatDateOnly(s.expiryDate),
+      "Status": s.status,
+      "Days Left": s.daysLeft,
+      "Scan Date": formatDateOnly(s.scanDate),
+      "Action Required": s.actionRequired,
+      "Remarks": s.remarks,
+      "_wrongRrp": (s as any).wrongRrp === true,
+      "_missingSpecialTicket": (s as any).missingSpecialTicket === true,
+      "_notOnDisplay": (s as any).notOnDisplay === true,
+    }));
 
     const filename = `Expiry_Scans_${setupData?.storeLocation || 'Export'}_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`;
     const fileBase64 = await exportToExcel(exportData, filename.replace(".xlsx", ""));
@@ -692,26 +735,32 @@ export default function Home() {
                   />
                   
                   {/* Matched item info panel */}
-                  {matchedItem && (matchedItem.rrp || matchedItem.special || matchedItem.soh) && (
+                  {matchedItem && (matchedItem.rrp || matchedItem.special || matchedItem.soh || lookupSoh(watchBarcode) != null) && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-1.5 text-sm">
-                      <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Master Data</div>
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        {matchedItem.rrp && (
+                      <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Item Data</div>
+                      <div className="grid grid-cols-2 gap-2 text-center">
+                        {matchedItem?.rrp && (
                           <div className="bg-white rounded-md border border-amber-100 px-2 py-1.5">
                             <div className="text-xs text-zinc-500">RRP</div>
                             <div className="font-bold text-zinc-900">${matchedItem.rrp}</div>
                           </div>
                         )}
-                        {matchedItem.special && (
+                        {matchedItem?.special && (
                           <div className="bg-white rounded-md border border-green-100 px-2 py-1.5">
                             <div className="text-xs text-zinc-500">Special</div>
                             <div className="font-bold text-green-700">${matchedItem.special}</div>
                           </div>
                         )}
-                        {matchedItem.soh && (
+                        {matchedItem?.soh && (
                           <div className="bg-white rounded-md border border-blue-100 px-2 py-1.5">
                             <div className="text-xs text-zinc-500">Store SOH</div>
                             <div className="font-bold text-blue-700">{matchedItem.soh}</div>
+                          </div>
+                        )}
+                        {lookupSoh(watchBarcode) != null && (
+                          <div className="bg-white rounded-md border border-purple-100 px-2 py-1.5">
+                            <div className="text-xs text-zinc-500">System SOH</div>
+                            <div className="font-bold text-purple-700">{lookupSoh(watchBarcode)}</div>
                           </div>
                         )}
                       </div>
@@ -797,6 +846,74 @@ export default function Home() {
                     )}
                   />
 
+                  {/* Compliance flags */}
+                  <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 space-y-3">
+                    <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Compliance Flags</div>
+                    <FormField
+                      control={scanForm.control}
+                      name="wrongRrp"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center gap-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              className="data-[state=checked]:bg-red-500 data-[state=checked]:border-red-500"
+                            />
+                          </FormControl>
+                          <FormLabel className="text-sm font-medium text-zinc-800 cursor-pointer">Wrong RRP on shelf</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={scanForm.control}
+                      name="missingSpecialTicket"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center gap-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              className="data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
+                            />
+                          </FormControl>
+                          <FormLabel className="text-sm font-medium text-zinc-800 cursor-pointer">Missing special ticket</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={scanForm.control}
+                      name="notOnDisplay"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center gap-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              className="data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                            />
+                          </FormControl>
+                          <FormLabel className="text-sm font-medium text-zinc-800 cursor-pointer">Not on display (system SOH exists)</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                    {watchNotOnDisplay && (
+                      <FormField
+                        control={scanForm.control}
+                        name="bulkPullQty"
+                        render={({ field }) => (
+                          <FormItem className="pl-7">
+                            <FormLabel className="text-zinc-700 text-sm">Bulk Pull Qty</FormLabel>
+                            <FormControl>
+                              <Input type="number" step="0.01" min="0.01" placeholder="e.g. 12" {...field} value={field.value ?? ""} className="bg-white border-zinc-200 font-mono h-9" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </div>
+
                   <Button 
                     type="submit" 
                     className="w-full h-12 mt-4 font-bold text-lg bg-zinc-950 text-white hover:bg-zinc-800 transition-colors"
@@ -848,6 +965,51 @@ export default function Home() {
                   <AlertCircle className="w-4 h-4 text-blue-600" />
                   <AlertDescription className="text-xs ml-2">
                     Upload your barcode master Excel file (.xlsx) to enable item lookups.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* SOH Data Upload Card */}
+          <Card className="border-zinc-200 shadow-sm bg-white">
+            <CardHeader className="pb-3 border-b border-zinc-100">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Database className="w-4 h-4 text-purple-500" />
+                System SOH Data
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-500">Loaded items:</span>
+                <span className="font-bold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">{sohData.size.toLocaleString()}</span>
+              </div>
+
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleSohFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    id="soh-upload"
+                  />
+                  <Button variant="outline" className="w-full border-zinc-200 text-zinc-500 text-sm pointer-events-none">
+                    <Upload className="w-3.5 h-3.5 mr-2" /> Upload SOH file
+                  </Button>
+                </div>
+                {sohData.size > 0 && (
+                  <Button variant="ghost" className="text-destructive hover:bg-destructive/10 text-sm" onClick={clearSohData}>
+                    Clear
+                  </Button>
+                )}
+              </div>
+
+              {sohData.size === 0 && (
+                <Alert className="bg-purple-50 border-purple-200 text-purple-800 py-2">
+                  <AlertCircle className="w-4 h-4 text-purple-600" />
+                  <AlertDescription className="text-xs ml-2">
+                    Upload your system SOH report (.xlsx) to show on-hand quantities per barcode.
                   </AlertDescription>
                 </Alert>
               )}

@@ -38,6 +38,13 @@ export interface ExpiryScan {
   scanDate: string;
   actionRequired?: string | null;
   remarks?: string | null;
+  rrp?: number | null;
+  specialPrice?: number | null;
+  systemSoh?: number | null;
+  wrongRrp?: boolean;
+  missingSpecialTicket?: boolean;
+  notOnDisplay?: boolean;
+  bulkPullQty?: number | null;
   createdAt: string;
 }
 
@@ -53,6 +60,13 @@ export interface NewExpiryScan {
   expiryDate: string;
   scanDate: string;
   remarks?: string | null;
+  rrp?: number | null;
+  specialPrice?: number | null;
+  systemSoh?: number | null;
+  wrongRrp?: boolean;
+  missingSpecialTicket?: boolean;
+  notOnDisplay?: boolean;
+  bulkPullQty?: number | null;
 }
 
 export interface ExpirySessionSummary {

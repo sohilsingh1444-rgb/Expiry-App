@@ -63,7 +63,7 @@ router.get("/barcode-master/from-email", async (req, res): Promise<void> => {
       receivedDate = msg.envelope?.date?.toISOString() ?? null;
 
       // Parse raw source to find Excel attachment
-      const source = msg.source.toString("binary");
+      const source = (msg.source ?? Buffer.alloc(0)).toString("binary");
 
       // Extract MIME parts looking for Excel attachments
       const xlsxMatch = source.match(

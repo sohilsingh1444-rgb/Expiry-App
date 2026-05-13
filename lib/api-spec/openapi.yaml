@@ -180,6 +180,24 @@ components:
         remarks:
           type: string
           nullable: true
+        rrp:
+          type: number
+          nullable: true
+        specialPrice:
+          type: number
+          nullable: true
+        systemSoh:
+          type: number
+          nullable: true
+        wrongRrp:
+          type: boolean
+        missingSpecialTicket:
+          type: boolean
+        notOnDisplay:
+          type: boolean
+        bulkPullQty:
+          type: number
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -223,6 +241,24 @@ components:
           format: date
         remarks:
           type: string
+          nullable: true
+        rrp:
+          type: number
+          nullable: true
+        specialPrice:
+          type: number
+          nullable: true
+        systemSoh:
+          type: number
+          nullable: true
+        wrongRrp:
+          type: boolean
+        missingSpecialTicket:
+          type: boolean
+        notOnDisplay:
+          type: boolean
+        bulkPullQty:
+          type: number
           nullable: true
       required:
         - sessionId

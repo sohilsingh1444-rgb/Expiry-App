@@ -22,5 +22,12 @@ export interface ExpiryScan {
   scanDate: Date;
   actionRequired?: string | null;
   remarks?: string | null;
+  rrp?: number | null;
+  specialPrice?: number | null;
+  systemSoh?: number | null;
+  wrongRrp?: boolean;
+  missingSpecialTicket?: boolean;
+  notOnDisplay?: boolean;
+  bulkPullQty?: number | null;
   createdAt: Date;
 }
