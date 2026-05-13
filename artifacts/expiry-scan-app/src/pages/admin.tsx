@@ -56,6 +56,7 @@ type AppSettings = {
 type StoreRow = {
   code: string;
   name: string;
+  region: string;
   emails: string[];
 };
 
@@ -79,6 +80,7 @@ export default function AdminPage() {
   const [storeDialog, setStoreDialog] = useState<{ open: boolean; editing: StoreRow | null }>({ open: false, editing: null });
   const [storeCode, setStoreCode] = useState("");
   const [storeName, setStoreName] = useState("");
+  const [storeRegion, setStoreRegion] = useState<"WR" | "CR" | "NR">("WR");
   const [storeEmailsRaw, setStoreEmailsRaw] = useState("");
   const [isSavingStore, setIsSavingStore] = useState(false);
 
@@ -222,6 +224,7 @@ export default function AdminPage() {
   function openAddStore() {
     setStoreCode("");
     setStoreName("");
+    setStoreRegion("WR");
     setStoreEmailsRaw("");
     setStoreDialog({ open: true, editing: null });
   }
@@ -229,6 +232,7 @@ export default function AdminPage() {
   function openEditStore(store: StoreRow) {
     setStoreCode(store.code);
     setStoreName(store.name);
+    setStoreRegion((store.region as "WR" | "CR" | "NR") || "WR");
     setStoreEmailsRaw(store.emails.join(", "));
     setStoreDialog({ open: true, editing: store });
   }
@@ -250,7 +254,7 @@ export default function AdminPage() {
         const res = await fetch(apiUrl(`/admin/stores/${storeDialog.editing.code}`), {
           method: "PUT",
           headers: { "Content-Type": "application/json", "x-admin-password": pw },
-          body: JSON.stringify({ name: storeName, emails }),
+          body: JSON.stringify({ name: storeName, region: storeRegion, emails }),
         });
         if (res.ok) {
           const updated: StoreRow = await res.json();
@@ -265,7 +269,7 @@ export default function AdminPage() {
         const res = await fetch(apiUrl("/admin/stores"), {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-admin-password": pw },
-          body: JSON.stringify({ code: storeCode, name: storeName, emails }),
+          body: JSON.stringify({ code: storeCode, name: storeName, region: storeRegion, emails }),
         });
         if (res.ok) {
           const created: StoreRow = await res.json();
@@ -449,6 +453,7 @@ export default function AdminPage() {
                   <TableHeader>
                     <TableRow className="bg-zinc-800 hover:bg-zinc-800 border-zinc-700">
                       <TableHead className="text-zinc-300 w-24">Code</TableHead>
+                      <TableHead className="text-zinc-300 w-16">Region</TableHead>
                       <TableHead className="text-zinc-300">Store Name</TableHead>
                       <TableHead className="text-zinc-300">Email Recipients</TableHead>
                       <TableHead className="w-20"></TableHead>
@@ -458,6 +463,11 @@ export default function AdminPage() {
                     {stores.map((store) => (
                       <TableRow key={store.code} className="border-zinc-800 hover:bg-zinc-800/50">
                         <TableCell className="text-amber-400 font-mono font-semibold">{store.code}</TableCell>
+                        <TableCell>
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded font-mono ${store.region === "NR" ? "bg-blue-900/50 text-blue-300" : store.region === "CR" ? "bg-emerald-900/50 text-emerald-300" : "bg-amber-900/50 text-amber-300"}`}>
+                            {store.region || "WR"}
+                          </span>
+                        </TableCell>
                         <TableCell className="text-white">{store.name}</TableCell>
                         <TableCell className="text-zinc-400 text-sm">
                           {store.emails.length === 0
@@ -630,10 +640,26 @@ export default function AdminPage() {
               <Input
                 value={storeName}
                 onChange={(e) => setStoreName(e.target.value)}
-                placeholder="e.g. New World Suva Central"
+                placeholder="e.g. Newworld Suva Central"
                 className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-600"
                 required
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-zinc-300">Region</Label>
+              <div className="flex gap-2">
+                {(["WR", "CR", "NR"] as const).map(r => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setStoreRegion(r)}
+                    className={`flex-1 py-2 rounded-md text-sm font-bold border transition-colors ${storeRegion === r ? (r === "NR" ? "bg-blue-700 border-blue-600 text-white" : r === "CR" ? "bg-emerald-700 border-emerald-600 text-white" : "bg-amber-600 border-amber-500 text-white") : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700"}`}
+                  >
+                    {r === "WR" ? "Western (WR)" : r === "CR" ? "Central (CR)" : "Northern (NR)"}
+                  </button>
+                ))}
+              </div>
+              <p className="text-zinc-500 text-xs">Region determines which RRP/Special Price columns are used from the barcode master</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-zinc-300">Email Recipients</Label>

@@ -7,26 +7,32 @@ const router: IRouter = Router();
 const DEFAULT_URGENT_DAYS = 2;
 const DEFAULT_NEAR_EXPIRY_DAYS = 15;
 
-const DEFAULT_STORES: Array<{ code: string; name: string; emails: string[] }> = [
-  { code: "S0001", name: "New World Laucala Bay (S0001)", emails: ["nwlba1@newworld.com.fj", "mgr_ba1@newworld.com.fj"] },
-  { code: "S0003", name: "New World Laucala Bay 3 (S0003)", emails: ["nwlba3@newworld.com.fj"] },
-  { code: "S0005", name: "New World Lami (S0005)", emails: ["nwlada@newworld.com.fj"] },
-  { code: "S0006", name: "New World Nadi (S0006)", emails: ["nwlnad@newworld.com.fj"] },
-  { code: "S0010", name: "New World Nausori (S0010)", emails: ["nwlnts@newworld.com.fj"] },
-  { code: "S0011", name: "IGA Superstore (S0011)", emails: ["igasup@newworld.com.fj"] },
-  { code: "S0013", name: "New World Rakiraki (S0013)", emails: ["nwlrak@newworld.com.fj"] },
-  { code: "S0014", name: "New World Labasa (S0014)", emails: ["nwllab@newworld.com.fj"] },
-  { code: "S0016", name: "IGA Savusavu (S0016)", emails: ["igasavusavu@newworld.com.fj"] },
-  { code: "S0018", name: "IGA Lautoka (S0018)", emails: ["igaltk@newworld.com.fj"] },
-  { code: "S0019", name: "IGA Nakasi (S0019)", emails: ["iganak@newworld.com.fj"] },
-  { code: "S0020", name: "New World Narere (S0020)", emails: ["nwlnar@newworld.com.fj"] },
-  { code: "S0021", name: "New World Nausori (S0021)", emails: ["nwlnau@newworld.com.fj"] },
-  { code: "S0025", name: "New World Tavua (S0025)", emails: ["nwltav@newworld.com.fj"] },
-  { code: "S0026", name: "New World Valelevu (S0026)", emails: ["nwlvit@newworld.com.fj"] },
-  { code: "S0029", name: "IGA Downtown (S0029)", emails: ["igadcc@newworld.com.fj"] },
-  { code: "S0033", name: "IGA GST (S0033)", emails: ["igagst@newworld.com.fj"] },
-  { code: "S0035", name: "IGA Waiyavi (S0035)", emails: ["igawaiyavi@newworld.com.fj"] },
-  { code: "S0036", name: "IGA Nadi (S0036)", emails: ["iganad@newworld.com.fj"] },
+const DEFAULT_STORES: Array<{ code: string; name: string; region: string; emails: string[] }> = [
+  { code: "S0001", name: "Newworld Ba1",         region: "WR", emails: [] },
+  { code: "S0003", name: "Newworld Ba3",          region: "WR", emails: [] },
+  { code: "S0005", name: "Newworld Adams",        region: "WR", emails: [] },
+  { code: "S0006", name: "Newworld Namaka",       region: "WR", emails: [] },
+  { code: "S0010", name: "Newworld Nadi Town",    region: "WR", emails: [] },
+  { code: "S0011", name: "IGA Super",             region: "WR", emails: [] },
+  { code: "S0013", name: "Newworld Rakiraki",     region: "WR", emails: [] },
+  { code: "S0025", name: "Newworld Tavua",        region: "WR", emails: [] },
+  { code: "S0018", name: "IGA Lautoka",           region: "WR", emails: [] },
+  { code: "S0035", name: "IGA Waiyavi",           region: "WR", emails: [] },
+  { code: "S0036", name: "IGA Nadi Plaza",        region: "WR", emails: [] },
+  { code: "B0004", name: "Lautoka Warehouse",     region: "WR", emails: [] },
+  { code: "B0008", name: "Nwl CDC",               region: "WR", emails: [] },
+  { code: "B0002", name: "Ghimly Warehouse",      region: "WR", emails: [] },
+  { code: "B0001", name: "Ba Warehouse",          region: "WR", emails: [] },
+  { code: "S0019", name: "IGA Nakasi",            region: "CR", emails: [] },
+  { code: "S0020", name: "Newworld Narere",       region: "CR", emails: [] },
+  { code: "S0026", name: "Newworld VitiPlaza",    region: "CR", emails: [] },
+  { code: "S0021", name: "Newworld Nausori",      region: "CR", emails: [] },
+  { code: "S0029", name: "IGA Damodhar",          region: "CR", emails: [] },
+  { code: "S0033", name: "IGA Greig St",          region: "CR", emails: [] },
+  { code: "S0032", name: "Central Bakery",        region: "CR", emails: [] },
+  { code: "B0003", name: "Vatuwaqa Warehouse",    region: "CR", emails: [] },
+  { code: "S0014", name: "Newworld Labasa",       region: "NR", emails: [] },
+  { code: "S0016", name: "IGA Savusavu",          region: "NR", emails: [] },
 ];
 
 export async function ensureStoresSeeded() {
@@ -144,19 +150,35 @@ router.delete("/admin/sessions/:sessionId", async (req, res): Promise<void> => {
   res.json({ deleted: deleted.length });
 });
 
-// ── Stores CRUD ──────────────────────────────────────────────────────────────
+// ── Public: store list (used by main app combobox) ───────────────────────────
+
+router.get("/stores", async (_req, res): Promise<void> => {
+  await ensureStoresSeeded();
+  const stores = await db
+    .select({ code: storesTable.code, name: storesTable.name, region: storesTable.region })
+    .from(storesTable)
+    .orderBy(storesTable.region, storesTable.code);
+  res.json(stores);
+});
+
+// ── Stores CRUD (admin-only) ─────────────────────────────────────────────────
 
 router.get("/admin/stores", async (req, res): Promise<void> => {
   if (!checkAdminPassword(req, res)) return;
   await ensureStoresSeeded();
-  const stores = await db.select().from(storesTable).orderBy(storesTable.code);
+  const stores = await db.select().from(storesTable).orderBy(storesTable.region, storesTable.code);
   res.json(stores);
 });
 
 router.post("/admin/stores", async (req, res): Promise<void> => {
   if (!checkAdminPassword(req, res)) return;
 
-  const { code, name, emails } = req.body as { code?: string; name?: string; emails?: string[] };
+  const { code, name, region, emails } = req.body as {
+    code?: string;
+    name?: string;
+    region?: string;
+    emails?: string[];
+  };
 
   if (!code || !name) {
     res.status(400).json({ error: "code and name are required" });
@@ -166,10 +188,11 @@ router.post("/admin/stores", async (req, res): Promise<void> => {
     res.status(400).json({ error: "emails must be an array" });
     return;
   }
+  const regionVal = (["WR", "CR", "NR"].includes(region ?? "") ? region : "WR") as string;
 
   const [row] = await db
     .insert(storesTable)
-    .values({ code: code.toUpperCase().trim(), name: name.trim(), emails })
+    .values({ code: code.toUpperCase().trim(), name: name.trim(), region: regionVal, emails })
     .returning();
 
   res.status(201).json(row);
@@ -179,7 +202,11 @@ router.put("/admin/stores/:code", async (req, res): Promise<void> => {
   if (!checkAdminPassword(req, res)) return;
 
   const { code } = req.params;
-  const { name, emails } = req.body as { name?: string; emails?: string[] };
+  const { name, region, emails } = req.body as {
+    name?: string;
+    region?: string;
+    emails?: string[];
+  };
 
   if (!name) {
     res.status(400).json({ error: "name is required" });
@@ -189,10 +216,11 @@ router.put("/admin/stores/:code", async (req, res): Promise<void> => {
     res.status(400).json({ error: "emails must be an array" });
     return;
   }
+  const regionVal = (["WR", "CR", "NR"].includes(region ?? "") ? region : "WR") as string;
 
   const [row] = await db
     .update(storesTable)
-    .set({ name: name.trim(), emails, updatedAt: new Date() })
+    .set({ name: name.trim(), region: regionVal, emails, updatedAt: new Date() })
     .where(eq(storesTable.code, code.toUpperCase()))
     .returning();
 

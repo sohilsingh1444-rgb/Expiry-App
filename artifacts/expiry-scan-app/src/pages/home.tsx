@@ -50,7 +50,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { getApiBase } from "@/lib/api-base";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { STORES, getStoreByCode, getStoreRegion } from "@/lib/stores";
+import { useStoreList } from "@/hooks/use-store-list";
 
 const setupSchema = z.object({
   pdUserName: z.string().min(1, "PD User Name is required"),
@@ -164,6 +164,7 @@ export default function Home() {
 
   const { masterData, isLoaded, saveMasterData, clearMasterData, lookupBarcode } = useBarcodeMaster();
   const { sohData, saveSohData, clearSohData, lookupSoh } = useSohData();
+  const { stores: storeList, getStoreByCode, getStoreRegion } = useStoreList();
 
   const setupForm = useForm<z.infer<typeof setupSchema>>({
     resolver: zodResolver(setupSchema),
@@ -676,7 +677,7 @@ export default function Home() {
                                 const regionLabel = region === "WR" ? "Western Region (WR)" : region === "CR" ? "Central Region (CR)" : "Northern Region (NR)";
                                 return (
                                   <CommandGroup key={region} heading={regionLabel}>
-                                    {STORES.filter(s => s.region === region).map(store => (
+                                    {storeList.filter(s => s.region === region).map(store => (
                                       <CommandItem
                                         key={store.code}
                                         value={`${store.name} ${store.code} ${store.region}`}

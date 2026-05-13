@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 export const storesTable = pgTable("stores", {
   code: text("code").primaryKey(),
   name: text("name").notNull(),
+  region: text("region").notNull().default("WR"),
   emails: text("emails").array().notNull().default([]),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
