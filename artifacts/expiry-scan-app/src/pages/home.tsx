@@ -46,8 +46,16 @@ import { parseBarcodeMaster, parseSohFile, exportToExcel } from "@/lib/xlsx";
 import { useBarcodeMaster } from "@/hooks/use-barcode-master";
 import { useSohData } from "@/hooks/use-soh-data";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getApiBase } from "@/lib/api-base";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { STORES, getStoreByCode, getStoreRegion } from "@/lib/stores";
 
 const setupSchema = z.object({
   pdUserName: z.string().min(1, "PD User Name is required"),
@@ -213,7 +221,8 @@ export default function Home() {
 
   useEffect(() => {
     if (watchBarcode && watchBarcode.length > 3) {
-      const match = lookupBarcode(watchBarcode);
+      const storeRegion = setupData?.storeLocation ? getStoreRegion(setupData.storeLocation) : undefined;
+      const match = lookupBarcode(watchBarcode, storeRegion);
       if (match) {
         setMatchedItem(match);
         if (!scanForm.getValues("itemNumber")) {
@@ -644,9 +653,22 @@ export default function Home() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-zinc-900 font-semibold">Store Location</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Store 101" className="bg-white border-zinc-300" {...field} />
-                      </FormControl>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="bg-white border-zinc-300">
+                            <SelectValue placeholder="Select a store…" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {STORES.map(store => (
+                            <SelectItem key={store.code} value={store.code}>
+                              <span className="font-medium">{store.name}</span>
+                              <span className="ml-2 text-xs text-zinc-400 font-mono">{store.code}</span>
+                              <span className="ml-1 text-xs text-zinc-400">[{store.region}]</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -686,7 +708,11 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-4 text-sm font-medium text-zinc-300">
             <div className="flex items-center gap-1.5 bg-zinc-900 px-3 py-1.5 rounded-md border border-zinc-800">
-              <span className="text-zinc-500">Loc:</span> <span className="text-amber-500">{setupData?.storeLocation}</span>
+              <span className="text-zinc-500">Loc:</span>
+              <span className="text-amber-500">{setupData?.storeLocation ? (getStoreByCode(setupData.storeLocation)?.name ?? setupData.storeLocation) : ''}</span>
+              {setupData?.storeLocation && getStoreRegion(setupData.storeLocation) && (
+                <span className="text-xs text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded font-mono">{getStoreRegion(setupData.storeLocation)}</span>
+              )}
             </div>
             <div className="flex items-center gap-1.5 bg-zinc-900 px-3 py-1.5 rounded-md border border-zinc-800">
               <span className="text-zinc-500">User:</span> <span className="text-amber-500">{setupData?.pdUserName}</span>

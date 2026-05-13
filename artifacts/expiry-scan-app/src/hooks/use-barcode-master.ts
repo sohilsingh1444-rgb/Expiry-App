@@ -6,6 +6,10 @@ export type BarcodeMasterRow = {
   description: string;
   rrp?: string;
   special?: string;
+  rrp_CRWR?: string;
+  special_CRWR?: string;
+  rrp_NR?: string;
+  special_NR?: string;
   soh?: string;
 };
 
@@ -34,17 +38,20 @@ export function useBarcodeMaster() {
     const map = new Map<string, BarcodeMasterRow>();
     rows.forEach(row => {
       const keys = Object.keys(row);
-      const getVal = (possibleNames: string[]) => {
-        const key = keys.find(k => possibleNames.some(pn => k.toLowerCase().replace(/[\s_]/g, '').includes(pn.toLowerCase().replace(/[\s_]/g, ''))));
+
+      const getVal = (...possibleNames: string[]) => {
+        const key = keys.find(k =>
+          possibleNames.some(pn =>
+            k.toLowerCase().replace(/[\s_\-]/g, '').includes(pn.toLowerCase().replace(/[\s_\-]/g, ''))
+          )
+        );
         return key ? String(row[key] ?? '').trim() : '';
       };
 
-      let rawBarcode = getVal(['barcode', 'upc', 'ean', 'gtin']) || row['Barcode'] || row['barcode'];
-      let itemNumber = getVal(['itemno', 'item', 'sku', 'article']) || row['ItemNumber'] || row['itemNumber'];
-      let description = getVal(['desc', 'name', 'product']) || row['Description'] || row['description'];
-      let rrp = getVal(['rrp', 'retailprice', 'retail']);
-      let special = getVal(['special', 'specialprice', 'promo', 'sale']);
-      let soh = getVal(['soh', 'stockonhand', 'stock', 'onhand', 'qty', 'quantity']);
+      let rawBarcode = getVal('barcode', 'upc', 'ean', 'gtin') || row['Barcode'] || row['barcode'];
+      let itemNumber = getVal('itemno', 'item', 'sku', 'article') || row['ItemNumber'] || row['itemNumber'];
+      let description = getVal('desc', 'name', 'product') || row['Description'] || row['description'];
+      let soh = getVal('soh', 'stockonhand', 'stock', 'onhand');
 
       if (!rawBarcode && Object.values(row).length > 0) {
         const vals = Object.values(row);
@@ -53,22 +60,35 @@ export function useBarcodeMaster() {
         description = String(vals[2] || '');
       }
 
+      const rrp_CRWR =
+        getVal('rrp_crwr', 'retailprice_crwr', 'price_crwr') ||
+        getVal('rrp', 'retailprice', 'retail');
+      const special_CRWR =
+        getVal('offerprice_crwr', 'offer_crwr', 'special_crwr', 'promo_crwr') ||
+        getVal('special', 'specialprice', 'promo', 'sale', 'offerprice', 'offer');
+      const rrp_NR =
+        getVal('rrp_nr', 'retailprice_nr', 'price_nr');
+      const special_NR =
+        getVal('offerprice_nr', 'offer_nr', 'special_nr', 'promo_nr');
+
       if (rawBarcode) {
         let barcodeStr = String(rawBarcode).trim();
-        if (barcodeStr.endsWith('.0')) {
-          barcodeStr = barcodeStr.slice(0, -2);
-        }
+        if (barcodeStr.endsWith('.0')) barcodeStr = barcodeStr.slice(0, -2);
         map.set(barcodeStr, {
           barcode: barcodeStr,
           itemNumber: String(itemNumber || '').trim(),
           description: String(description || '').trim(),
-          rrp: rrp || undefined,
-          special: special || undefined,
+          rrp: rrp_CRWR || undefined,
+          special: special_CRWR || undefined,
+          rrp_CRWR: rrp_CRWR || undefined,
+          special_CRWR: special_CRWR || undefined,
+          rrp_NR: rrp_NR || undefined,
+          special_NR: special_NR || undefined,
           soh: soh || undefined,
         });
       }
     });
-    
+
     setMasterData(map);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(map)));
@@ -82,12 +102,20 @@ export function useBarcodeMaster() {
     localStorage.removeItem(STORAGE_KEY);
   };
 
-  const lookupBarcode = (barcode: string) => {
+  const lookupBarcode = (barcode: string, region?: string): BarcodeMasterRow | undefined => {
     let normalized = String(barcode).trim();
-    if (normalized.endsWith('.0')) {
-      normalized = normalized.slice(0, -2);
+    if (normalized.endsWith('.0')) normalized = normalized.slice(0, -2);
+    const row = masterData.get(normalized);
+    if (!row) return undefined;
+    if (region) {
+      const isNR = region.toUpperCase() === 'NR';
+      return {
+        ...row,
+        rrp: isNR ? (row.rrp_NR || row.rrp) : (row.rrp_CRWR || row.rrp),
+        special: isNR ? (row.special_NR || row.special) : (row.special_CRWR || row.special),
+      };
     }
-    return masterData.get(normalized);
+    return row;
   };
 
   return {
@@ -95,6 +123,6 @@ export function useBarcodeMaster() {
     isLoaded,
     saveMasterData,
     clearMasterData,
-    lookupBarcode
+    lookupBarcode,
   };
 }

@@ -8,8 +8,60 @@ export async function parseBarcodeMaster(file: File): Promise<any[]> {
         const workbook = xlsx.read(data, { type: 'array' });
         const firstSheet = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheet];
-        const json = xlsx.utils.sheet_to_json(worksheet);
-        resolve(json as any[]);
+
+        // Read as array-of-arrays to handle multi-row regional headers
+        const aoa: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+        if (aoa.length < 2) { resolve([]); return; }
+
+        // Find the row that contains region labels (CR|WR / NR)
+        let regionRowIdx = -1;
+        for (let i = 0; i < Math.min(aoa.length, 10); i++) {
+          const rowUpper = aoa[i].map((c: any) => String(c ?? '').trim().toUpperCase());
+          if (rowUpper.some(c => c === 'CR|WR' || c === 'CR' || c === 'NR' || c === 'WR')) {
+            regionRowIdx = i;
+            break;
+          }
+        }
+
+        if (regionRowIdx === -1) {
+          // No regional headers — standard single-header parse
+          const json = xlsx.utils.sheet_to_json(worksheet);
+          resolve(json as any[]);
+          return;
+        }
+
+        const headerRowIdx = regionRowIdx + 1;
+        const regionRow: string[] = aoa[regionRowIdx].map((c: any) => String(c ?? '').trim().toUpperCase());
+        const headerRow: string[] = aoa[headerRowIdx]?.map((c: any) => String(c ?? '').trim().toLowerCase().replace(/\s+/g, '')) ?? [];
+
+        // Region propagates rightward across blank cells
+        const colRegions: string[] = [];
+        let currentRegion = '';
+        for (let c = 0; c < Math.max(regionRow.length, headerRow.length); c++) {
+          const cell = regionRow[c] ?? '';
+          if (cell === 'NR') currentRegion = 'NR';
+          else if (cell.includes('CR') || cell.includes('WR')) currentRegion = 'CRWR';
+          colRegions[c] = currentRegion;
+        }
+
+        // Build qualified column names
+        const colNames: string[] = headerRow.map((h, c) => {
+          if (!h) return `__col${c}`;
+          return colRegions[c] ? `${h}_${colRegions[c]}` : h;
+        });
+
+        // Parse data rows
+        const result: any[] = [];
+        for (let r = headerRowIdx + 1; r < aoa.length; r++) {
+          const row = aoa[r];
+          if (!row || row.every((c: any) => c === '' || c == null)) continue;
+          const obj: any = {};
+          colNames.forEach((name, c) => {
+            if (!name.startsWith('__col')) obj[name] = row[c] ?? '';
+          });
+          result.push(obj);
+        }
+        resolve(result);
       } catch (err) {
         reject(err);
       }
