@@ -278,7 +278,7 @@ export default function AdminPage() {
           closeStoreDialog();
         } else {
           const err = await res.json();
-          toast({ title: "Error", description: err.error ?? "Failed to add store.", variant: "destructive" });
+          toast({ title: "Error", description: err.detail ? `${err.error}: ${err.detail}` : (err.error ?? "Failed to add store."), variant: "destructive" });
         }
       }
     } finally {
