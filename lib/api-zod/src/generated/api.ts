@@ -90,7 +90,7 @@ export const CreateExpiryScanBody = zod.object({
   itemNumber: zod.string().nullish(),
   description: zod.string().nullish(),
   qty: zod.number().min(createExpiryScanBodyQtyMin),
-  expiryDate: zod.coerce.date(),
+  expiryDate: zod.coerce.date().nullish(),
   scanDate: zod.coerce.date(),
   remarks: zod.string().nullish(),
   rrp: zod.number().nullish(),

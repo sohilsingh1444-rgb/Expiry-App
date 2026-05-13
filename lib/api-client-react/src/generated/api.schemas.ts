@@ -57,7 +57,7 @@ export interface NewExpiryScan {
   description?: string | null;
   /** @minimum 0.01 */
   qty: number;
-  expiryDate: string;
+  expiryDate?: string | null;
   scanDate: string;
   remarks?: string | null;
   rrp?: number | null;

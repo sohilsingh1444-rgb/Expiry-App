@@ -176,7 +176,9 @@ router.post("/expiry-scans", async (req, res, next): Promise<void> => {
 
     const body = parsed.data;
     const today = dateOnlyToUtc(toDateOnly(new Date()));
-    const expiryDate = dateOnlyToUtc(toDateOnly(body.expiryDate));
+    const expiryDate = body.expiryDate
+      ? dateOnlyToUtc(toDateOnly(body.expiryDate))
+      : dateOnlyToUtc(toDateOnly(body.scanDate));
     const scanDate = dateOnlyToUtc(toDateOnly(body.scanDate));
     const status = calculateStatus(expiryDate, today);
 
@@ -197,7 +199,7 @@ router.post("/expiry-scans", async (req, res, next): Promise<void> => {
         missingSpecialTicket: body.missingSpecialTicket ?? false,
         notOnDisplay: body.notOnDisplay ?? false,
         bulkPullQty: body.bulkPullQty ?? null,
-        expiryDate: toDateOnly(expiryDate),
+        expiryDate: body.expiryDate ? toDateOnly(expiryDate) : toDateOnly(scanDate),
         status: status.status,
         daysLeft: status.daysLeft,
         scanDate: toDateOnly(scanDate),
