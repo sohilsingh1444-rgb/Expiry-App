@@ -239,13 +239,13 @@ export async function exportToExcel(allScans: any[], filename: string): Promise<
 
   await addSimpleSheet(
     workbook, 'RRP Scans', rrpScans,
-    ['PD User Name', 'Store Location', 'Barcode', 'Item Number', 'Description', 'RRP', 'Scan Date', 'Remarks'],
+    ['PD User Name', 'Store Location', 'Barcode', 'Item Number', 'Description', 'RRP', 'Qty', 'Scan Date', 'Remarks'],
     ['Scan Date'],
   );
 
   await addSimpleSheet(
     workbook, 'Special Ticket Scans', specialScans,
-    ['PD User Name', 'Store Location', 'Barcode', 'Item Number', 'Description', 'Special Price', 'Scan Date', 'Remarks'],
+    ['PD User Name', 'Store Location', 'Barcode', 'Item Number', 'Description', 'Special Price', 'Qty', 'Scan Date', 'Remarks'],
     ['Scan Date'],
   );
 
