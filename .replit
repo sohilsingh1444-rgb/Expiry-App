@@ -49,3 +49,8 @@ externalPort = 3003
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+SMTP_USER = "sohil.singh@newworld.com.fj"

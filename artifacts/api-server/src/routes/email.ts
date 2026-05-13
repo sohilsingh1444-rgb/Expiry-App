@@ -6,6 +6,30 @@ import { ensureStoresSeeded } from "./admin";
 
 const router: IRouter = Router();
 
+function createTransporter() {
+  const smtpUser = process.env.SMTP_USER ?? process.env.GMAIL_USER;
+  const smtpPass = process.env.SMTP_PASS ?? process.env.GMAIL_APP_PASSWORD;
+
+  if (!smtpUser || !smtpPass) return null;
+
+  const isOutlook = smtpUser.includes("newworld.com.fj") || smtpUser.includes("outlook") || smtpUser.includes("hotmail");
+
+  if (isOutlook) {
+    return nodemailer.createTransport({
+      host: "smtp.office365.com",
+      port: 587,
+      secure: false,
+      auth: { user: smtpUser, pass: smtpPass },
+      tls: { ciphers: "SSLv3" },
+    });
+  }
+
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: { user: smtpUser, pass: smtpPass },
+  });
+}
+
 router.get("/email/store-recipients", async (req, res): Promise<void> => {
   const { storeLocation } = req.query as { storeLocation?: string };
   if (!storeLocation) {
@@ -32,10 +56,10 @@ router.post("/email/send-export", async (req, res): Promise<void> => {
     return;
   }
 
-  const gmailUser = process.env.GMAIL_USER;
-  const gmailPass = process.env.GMAIL_APP_PASSWORD;
+  const smtpUser = process.env.SMTP_USER ?? process.env.GMAIL_USER;
+  const transporter = createTransporter();
 
-  if (!gmailUser || !gmailPass) {
+  if (!transporter || !smtpUser) {
     res.status(503).json({ error: "Email credentials not configured on server." });
     return;
   }
@@ -50,15 +74,10 @@ router.post("/email/send-export", async (req, res): Promise<void> => {
     return;
   }
 
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: { user: gmailUser, pass: gmailPass },
-  });
-
   const buffer = Buffer.from(fileBase64, "base64");
 
   await transporter.sendMail({
-    from: `"Expiry Tracker" <${gmailUser}>`,
+    from: `"Expiry Tracker" <${smtpUser}>`,
     to: recipients.join(", "),
     subject: `Expiry Scan Report — ${storeLocation} — ${pdUserName} — ${scanDate}`,
     text: `Please find attached the expiry scan report for ${storeLocation} by ${pdUserName} on ${scanDate}.`,
