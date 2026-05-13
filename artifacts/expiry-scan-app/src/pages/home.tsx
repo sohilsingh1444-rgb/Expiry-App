@@ -41,20 +41,13 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { AlertCircle, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight, Database } from "lucide-react";
+import { AlertCircle, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight, Database, ChevronsUpDown, Check } from "lucide-react";
 import { parseBarcodeMaster, parseSohFile, exportToExcel } from "@/lib/xlsx";
 import { useBarcodeMaster } from "@/hooks/use-barcode-master";
 import { useSohData } from "@/hooks/use-soh-data";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { getApiBase } from "@/lib/api-base";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { STORES, getStoreByCode, getStoreRegion } from "@/lib/stores";
@@ -166,6 +159,7 @@ export default function Home() {
   const [thresholds, setThresholds] = useState({ urgentDays: 2, nearExpiryDays: 15 });
   const [matchedItem, setMatchedItem] = useState<BarcodeMasterRow | null>(null);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [storeComboOpen, setStoreComboOpen] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const { masterData, isLoaded, saveMasterData, clearMasterData, lookupBarcode } = useBarcodeMaster();
@@ -655,30 +649,51 @@ export default function Home() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-zinc-900 font-semibold">Store Location</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="bg-white border-zinc-300">
-                            <SelectValue placeholder="Select a store…" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {(["WR", "CR", "NR"] as const).map(region => {
-                            const regionStores = STORES.filter(s => s.region === region);
-                            const regionLabel = region === "WR" ? "Western Region (WR)" : region === "CR" ? "Central Region (CR)" : "Northern Region (NR)";
-                            return (
-                              <SelectGroup key={region}>
-                                <SelectLabel className="text-xs font-bold uppercase tracking-wider text-zinc-500 px-2 py-1.5">{regionLabel}</SelectLabel>
-                                {regionStores.map(store => (
-                                  <SelectItem key={store.code} value={store.code}>
-                                    <span className="font-medium">{store.name}</span>
-                                    <span className="ml-2 text-xs text-zinc-400 font-mono">{store.code}</span>
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
+                      <Popover open={storeComboOpen} onOpenChange={setStoreComboOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <button
+                              type="button"
+                              role="combobox"
+                              aria-expanded={storeComboOpen}
+                              className={`w-full flex items-center justify-between rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm h-10 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-400 ${!field.value ? "text-zinc-400" : "text-zinc-900"}`}
+                            >
+                              <span className="truncate">
+                                {field.value
+                                  ? (() => { const s = getStoreByCode(field.value); return s ? `${s.name} — ${s.code} [${s.region}]` : field.value; })()
+                                  : "Select a store…"}
+                              </span>
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-zinc-400" />
+                            </button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="p-0 w-[340px]" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search store name or code…" className="h-9" />
+                            <CommandList className="max-h-64">
+                              <CommandEmpty>No store found.</CommandEmpty>
+                              {(["WR", "CR", "NR"] as const).map(region => {
+                                const regionLabel = region === "WR" ? "Western Region (WR)" : region === "CR" ? "Central Region (CR)" : "Northern Region (NR)";
+                                return (
+                                  <CommandGroup key={region} heading={regionLabel}>
+                                    {STORES.filter(s => s.region === region).map(store => (
+                                      <CommandItem
+                                        key={store.code}
+                                        value={`${store.name} ${store.code} ${store.region}`}
+                                        onSelect={() => { field.onChange(store.code); setStoreComboOpen(false); }}
+                                        className="flex items-center justify-between"
+                                      >
+                                        <span>{store.name} <span className="text-xs text-zinc-400 font-mono ml-1">{store.code}</span></span>
+                                        {field.value === store.code && <Check className="h-4 w-4 text-zinc-700" />}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                );
+                              })}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                       <FormMessage />
                     </FormItem>
                   )}
