@@ -41,7 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { AlertCircle, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight, RefreshCw, CheckCircle2 } from "lucide-react";
+import { AlertCircle, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight } from "lucide-react";
 import { parseBarcodeMaster, exportToExcel } from "@/lib/xlsx";
 import { useBarcodeMaster } from "@/hooks/use-barcode-master";
 import { getApiBase } from "@/lib/api-base";
@@ -115,8 +115,6 @@ function formatDateOnly(value?: string | Date | null) {
 const API_BASE = getApiBase();
 
 const SESSION_STORAGE_KEY = "expiry_scan_session";
-const MASTER_SYNC_KEY = "expiry_scan_master_synced_at";
-const AUTO_SYNC_INTERVAL_MS = 60 * 60 * 1000; // re-sync if older than 1 hour
 
 function loadPersistedSession(): { setupData: { pdUserName: string; storeLocation: string; scanDate: string }; sessionId: string } | null {
   try {
@@ -144,14 +142,6 @@ export default function Home() {
   const [thresholds, setThresholds] = useState({ urgentDays: 2, nearExpiryDays: 15 });
   const [matchedItem, setMatchedItem] = useState<BarcodeMasterRow | null>(null);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
-  const [isSyncingMaster, setIsSyncingMaster] = useState(false);
-  const [emailSyncError, setEmailSyncError] = useState<string | null>(null);
-  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(() => {
-    try {
-      const raw = localStorage.getItem(MASTER_SYNC_KEY);
-      return raw ? new Date(raw) : null;
-    } catch { return null; }
-  });
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const { masterData, isLoaded, saveMasterData, clearMasterData, lookupBarcode } = useBarcodeMaster();
@@ -228,62 +218,6 @@ export default function Home() {
     return () => window.clearInterval(id);
   }, []);
 
-  const syncBarcodeMasterFromEmail = async (silent = false) => {
-    if (isSyncingMaster) return;
-    setIsSyncingMaster(true);
-    if (!silent) setEmailSyncError(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/barcode-master/from-email`);
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (!silent) {
-          const msg: string = data.error ?? "Unknown error";
-          const isAuthError = msg.toLowerCase().includes("auth") || msg.toLowerCase().includes("password") || msg.toLowerCase().includes("credential");
-          setEmailSyncError(isAuthError ? "AUTH_FAILED" : msg);
-        }
-        return;
-      }
-
-      setEmailSyncError(null);
-
-      // Convert base64 → File → parse
-      const bytes = Uint8Array.from(atob(data.fileBase64), c => c.charCodeAt(0));
-      const file = new File([bytes], data.filename ?? "barcode_master.xlsx", {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const rows = await parseBarcodeMaster(file);
-      saveMasterData(rows);
-
-      const now = new Date();
-      setLastSyncedAt(now);
-      try { localStorage.setItem(MASTER_SYNC_KEY, now.toISOString()); } catch {}
-
-      if (!silent) {
-        toast({
-          title: "Barcode master updated",
-          description: `Loaded ${rows.length} items from email (${data.filename}).`,
-        });
-      }
-    } catch {
-      if (!silent) setEmailSyncError("NETWORK_ERROR");
-    } finally {
-      setIsSyncingMaster(false);
-    }
-  };
-
-  // Auto-sync barcode master on mount if stale or empty
-  useEffect(() => {
-    if (!isLoaded) return;
-    const needsSync =
-      masterData.size === 0 ||
-      !lastSyncedAt ||
-      Date.now() - lastSyncedAt.getTime() > AUTO_SYNC_INTERVAL_MS;
-    if (needsSync) {
-      syncBarcodeMasterFromEmail(true);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded]);
 
   const { data: latestSession, isLoading: isLoadingSession } = useGetLatestExpirySession(
     setupData || { pdUserName: "", storeLocation: "", scanDate: "" },
@@ -877,22 +811,10 @@ export default function Home() {
 
           <Card className="border-zinc-200 shadow-sm bg-white">
             <CardHeader className="pb-3 border-b border-zinc-100">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <FileSpreadsheet className="w-4 h-4 text-zinc-500" />
-                  Barcode Master Data
-                </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2 text-zinc-500 hover:text-amber-600 hover:bg-amber-50"
-                  onClick={() => syncBarcodeMasterFromEmail(false)}
-                  disabled={isSyncingMaster}
-                  title="Sync latest master from email"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isSyncingMaster ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-zinc-500" />
+                Barcode Master Data
+              </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 space-y-3">
               <div className="flex items-center justify-between text-sm">
@@ -900,53 +822,7 @@ export default function Home() {
                 <span className="font-bold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">{masterData.size.toLocaleString()}</span>
               </div>
 
-              {/* Sync status */}
-              {isSyncingMaster ? (
-                <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                  <RefreshCw className="w-3 h-3 animate-spin shrink-0" />
-                  Syncing latest barcode master from email...
-                </div>
-              ) : emailSyncError === "AUTH_FAILED" ? (
-                <div className="text-xs bg-amber-50 border border-amber-300 rounded-md px-3 py-2.5 space-y-1.5">
-                  <p className="font-semibold text-amber-800 flex items-center gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    Gmail access not enabled — fix in 2 steps:
-                  </p>
-                  <ol className="list-decimal list-inside text-amber-700 space-y-1 pl-0.5">
-                    <li>Go to <strong>Gmail → Settings → See all settings → Forwarding and POP/IMAP</strong> and set <strong>IMAP to Enabled</strong>, then Save.</li>
-                    <li>In your Google Account go to <strong>Security → 2-Step Verification → App passwords</strong>, create one for <em>Mail</em>, and paste it as <code className="bg-amber-100 px-1 rounded">GMAIL_APP_PASSWORD</code> in the admin secrets.</li>
-                  </ol>
-                  <p className="text-amber-600">Once done, click <strong>Sync from Email</strong> again.</p>
-                </div>
-              ) : emailSyncError === "NETWORK_ERROR" ? (
-                <div className="flex items-center gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  Could not reach the server. Check your connection and try again.
-                </div>
-              ) : emailSyncError ? (
-                <div className="flex items-center gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  {emailSyncError}
-                </div>
-              ) : lastSyncedAt ? (
-                <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2">
-                  <CheckCircle2 className="w-3 h-3 shrink-0" />
-                  Synced {format(lastSyncedAt, "dd MMM yyyy, HH:mm")}
-                </div>
-              ) : null}
-
-              {/* Manual sync button */}
-              <Button
-                variant="outline"
-                className="w-full border-amber-300 text-amber-700 hover:bg-amber-50 font-medium"
-                onClick={() => syncBarcodeMasterFromEmail(false)}
-                disabled={isSyncingMaster}
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${isSyncingMaster ? "animate-spin" : ""}`} />
-                {isSyncingMaster ? "Syncing..." : "Sync from Email"}
-              </Button>
-
-              {/* Manual upload fallback */}
+              {/* Upload */}
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Input
@@ -967,11 +843,11 @@ export default function Home() {
                 )}
               </div>
 
-              {masterData.size === 0 && !isSyncingMaster && (
+              {masterData.size === 0 && (
                 <Alert className="bg-blue-50 border-blue-200 text-blue-800 py-2">
                   <AlertCircle className="w-4 h-4 text-blue-600" />
                   <AlertDescription className="text-xs ml-2">
-                    Send the Excel to <strong>your Gmail</strong> with subject <em>"Updated Barcode Master - Expiry"</em> to auto-load.
+                    Upload your barcode master Excel file (.xlsx) to enable item lookups.
                   </AlertDescription>
                 </Alert>
               )}
