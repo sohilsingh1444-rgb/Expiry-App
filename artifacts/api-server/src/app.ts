@@ -33,12 +33,13 @@ app.use("/api", router);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   const message = err instanceof Error ? err.message : String(err);
-  const stack = err instanceof Error ? err.stack : undefined;
-  const cause = err instanceof Error && err.cause instanceof Error
-    ? { message: err.cause.message, code: (err.cause as NodeJS.ErrnoException).code }
-    : undefined;
+  const causeErr = err instanceof Error && err.cause instanceof Error ? err.cause : undefined;
+  const causeMsg = causeErr ? causeErr.message : undefined;
+  const causeCode = causeErr ? (causeErr as NodeJS.ErrnoException).code : undefined;
   logger.error({ err }, "Unhandled route error");
-  res.status(500).json({ error: message, cause, stack });
+  // Include cause message in the top-level error so clients always see the real DB error
+  const fullError = causeMsg ? `${message} | ${causeMsg}` : message;
+  res.status(500).json({ error: fullError, cause: causeMsg ? { message: causeMsg, code: causeCode } : undefined });
 });
 
 export default app;
