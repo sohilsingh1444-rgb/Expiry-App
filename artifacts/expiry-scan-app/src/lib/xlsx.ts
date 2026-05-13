@@ -1,95 +1,102 @@
-export async function parseBarcodeMaster(file: File): Promise<any[]> {
-  const xlsx = await import('xlsx');
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = e.target?.result;
-        const workbook = xlsx.read(data, { type: 'array' });
-        const firstSheet = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheet];
+function extractCellValue(v: unknown): any {
+  if (v == null) return '';
+  if (typeof v !== 'object') return v;
+  if (v instanceof Date) return v;
+  const obj = v as Record<string, any>;
+  if (Array.isArray(obj.richText)) {
+    return obj.richText.map((rt: any) => String(rt.text ?? '')).join('');
+  }
+  if ('result' in obj) return obj.result ?? '';
+  if ('error' in obj) return '';
+  return String(v);
+}
 
-        // Read as array-of-arrays to handle multi-row regional headers
-        const aoa: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-        if (aoa.length < 2) { resolve([]); return; }
+async function readWorksheetAsAoa(file: File): Promise<any[][]> {
+  const ExcelJS = (await import('exceljs')).default;
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await file.arrayBuffer());
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return [];
 
-        // Find the row that contains region labels (CR|WR / NR)
-        let regionRowIdx = -1;
-        for (let i = 0; i < Math.min(aoa.length, 10); i++) {
-          const rowUpper = aoa[i].map((c: any) => String(c ?? '').trim().toUpperCase());
-          if (rowUpper.some(c => c === 'CR|WR' || c === 'CR' || c === 'NR' || c === 'WR')) {
-            regionRowIdx = i;
-            break;
-          }
-        }
-
-        if (regionRowIdx === -1) {
-          // No regional headers — standard single-header parse
-          const json = xlsx.utils.sheet_to_json(worksheet);
-          resolve(json as any[]);
-          return;
-        }
-
-        const headerRowIdx = regionRowIdx + 1;
-        const regionRow: string[] = aoa[regionRowIdx].map((c: any) => String(c ?? '').trim().toUpperCase());
-        const headerRow: string[] = aoa[headerRowIdx]?.map((c: any) => String(c ?? '').trim().toLowerCase().replace(/\s+/g, '')) ?? [];
-
-        // Region propagates rightward across blank cells
-        const colRegions: string[] = [];
-        let currentRegion = '';
-        for (let c = 0; c < Math.max(regionRow.length, headerRow.length); c++) {
-          const cell = regionRow[c] ?? '';
-          if (cell === 'NR') currentRegion = 'NR';
-          else if (cell.includes('CR') || cell.includes('WR')) currentRegion = 'CRWR';
-          colRegions[c] = currentRegion;
-        }
-
-        // Build qualified column names
-        const colNames: string[] = headerRow.map((h, c) => {
-          if (!h) return `__col${c}`;
-          return colRegions[c] ? `${h}_${colRegions[c]}` : h;
-        });
-
-        // Parse data rows
-        const result: any[] = [];
-        for (let r = headerRowIdx + 1; r < aoa.length; r++) {
-          const row = aoa[r];
-          if (!row || row.every((c: any) => c === '' || c == null)) continue;
-          const obj: any = {};
-          colNames.forEach((name, c) => {
-            if (!name.startsWith('__col')) obj[name] = row[c] ?? '';
-          });
-          result.push(obj);
-        }
-        resolve(result);
-      } catch (err) {
-        reject(err);
-      }
-    };
-    reader.onerror = reject;
-    reader.readAsArrayBuffer(file);
+  const aoa: any[][] = [];
+  sheet.eachRow({ includeEmpty: false }, (row) => {
+    const vals = row.values as any[];
+    const rowArr: any[] = vals.slice(1).map(extractCellValue);
+    aoa.push(rowArr);
   });
+  return aoa;
+}
+
+export async function parseBarcodeMaster(file: File): Promise<any[]> {
+  const aoa = await readWorksheetAsAoa(file);
+  if (aoa.length < 2) return [];
+
+  let regionRowIdx = -1;
+  for (let i = 0; i < Math.min(aoa.length, 10); i++) {
+    const rowUpper = aoa[i].map((c: any) => String(c ?? '').trim().toUpperCase());
+    if (rowUpper.some(c => c === 'CR|WR' || c === 'CR' || c === 'NR' || c === 'WR')) {
+      regionRowIdx = i;
+      break;
+    }
+  }
+
+  if (regionRowIdx === -1) {
+    const headers = aoa[0].map((c: any) => String(c ?? ''));
+    const result: any[] = [];
+    for (let r = 1; r < aoa.length; r++) {
+      const row = aoa[r];
+      if (!row || row.every((c: any) => c === '' || c == null)) continue;
+      const obj: any = {};
+      headers.forEach((h, c) => { if (h) obj[h] = row[c] ?? ''; });
+      result.push(obj);
+    }
+    return result;
+  }
+
+  const headerRowIdx = regionRowIdx + 1;
+  const regionRow: string[] = aoa[regionRowIdx].map((c: any) => String(c ?? '').trim().toUpperCase());
+  const headerRow: string[] = aoa[headerRowIdx]?.map((c: any) => String(c ?? '').trim().toLowerCase().replace(/\s+/g, '')) ?? [];
+
+  const colRegions: string[] = [];
+  let currentRegion = '';
+  for (let c = 0; c < Math.max(regionRow.length, headerRow.length); c++) {
+    const cell = regionRow[c] ?? '';
+    if (cell === 'NR') currentRegion = 'NR';
+    else if (cell.includes('CR') || cell.includes('WR')) currentRegion = 'CRWR';
+    colRegions[c] = currentRegion;
+  }
+
+  const colNames: string[] = headerRow.map((h, c) => {
+    if (!h) return `__col${c}`;
+    return colRegions[c] ? `${h}_${colRegions[c]}` : h;
+  });
+
+  const result: any[] = [];
+  for (let r = headerRowIdx + 1; r < aoa.length; r++) {
+    const row = aoa[r];
+    if (!row || row.every((c: any) => c === '' || c == null)) continue;
+    const obj: any = {};
+    colNames.forEach((name, c) => {
+      if (!name.startsWith('__col')) obj[name] = row[c] ?? '';
+    });
+    result.push(obj);
+  }
+  return result;
 }
 
 export async function parseSohFile(file: File): Promise<any[]> {
-  const xlsx = await import('xlsx');
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = e.target?.result;
-        const workbook = xlsx.read(data, { type: 'array' });
-        const firstSheet = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheet];
-        const json = xlsx.utils.sheet_to_json(worksheet);
-        resolve(json as any[]);
-      } catch (err) {
-        reject(err);
-      }
-    };
-    reader.onerror = reject;
-    reader.readAsArrayBuffer(file);
-  });
+  const aoa = await readWorksheetAsAoa(file);
+  if (aoa.length < 2) return [];
+  const headers = aoa[0].map((c: any) => String(c ?? ''));
+  const result: any[] = [];
+  for (let r = 1; r < aoa.length; r++) {
+    const row = aoa[r];
+    if (!row || row.every((c: any) => c === '' || c == null)) continue;
+    const obj: any = {};
+    headers.forEach((h, c) => { if (h) obj[h] = row[c] ?? ''; });
+    result.push(obj);
+  }
+  return result;
 }
 
 function parseDateOnly(value: unknown): Date | null {
@@ -269,8 +276,6 @@ export async function exportToExcel(allScans: any[], filename: string): Promise<
   const workbook = new ExcelJS.Workbook();
   workbook.calcProperties.fullCalcOnLoad = true;
 
-  // Sheet 1: Expiry Scans — items with real expiry issues (not OK).
-  // Exclude compliance-only scans (no real expiry date entered, defaulted to scan date).
   const expiryScans = allScans.filter(s => {
     if (s['Status'] === 'OK') return false;
     const isComplianceOnly = (s['_wrongRrp'] || s['_missingSpecialTicket'] || s['_notOnDisplay'])
@@ -278,13 +283,8 @@ export async function exportToExcel(allScans: any[], filename: string): Promise<
     return !isComplianceOnly;
   });
 
-  // Sheet 2: RRP Scans — items flagged as having wrong RRP on shelf
   const rrpScans = allScans.filter(s => s['_wrongRrp'] === true);
-
-  // Sheet 3: Special Ticket Scans — items missing special ticket
   const specialScans = allScans.filter(s => s['_missingSpecialTicket'] === true);
-
-  // Sheet 4: Not On Display — system SOH exists but not on shelf
   const notOnDisplayScans = allScans.filter(s => s['_notOnDisplay'] === true);
 
   await addExpirySheet(workbook, 'Expiry Scans', expiryScans);
