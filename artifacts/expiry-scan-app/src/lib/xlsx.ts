@@ -217,8 +217,14 @@ export async function exportToExcel(allScans: any[], filename: string): Promise<
   const workbook = new ExcelJS.Workbook();
   workbook.calcProperties.fullCalcOnLoad = true;
 
-  // Sheet 1: Expiry Scans — items with expiry issues (not OK)
-  const expiryScans = allScans.filter(s => s['Status'] !== 'OK');
+  // Sheet 1: Expiry Scans — items with real expiry issues (not OK).
+  // Exclude compliance-only scans (no real expiry date entered, defaulted to scan date).
+  const expiryScans = allScans.filter(s => {
+    if (s['Status'] === 'OK') return false;
+    const isComplianceOnly = (s['_wrongRrp'] || s['_missingSpecialTicket'] || s['_notOnDisplay'])
+      && s['Expiry Date'] === s['Scan Date'];
+    return !isComplianceOnly;
+  });
 
   // Sheet 2: RRP Scans — items flagged as having wrong RRP on shelf
   const rrpScans = allScans.filter(s => s['_wrongRrp'] === true);
