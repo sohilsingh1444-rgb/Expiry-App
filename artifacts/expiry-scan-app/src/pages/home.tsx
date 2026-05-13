@@ -65,7 +65,6 @@ const scanSchema = z.object({
   wrongRrp: z.boolean().default(false),
   missingSpecialTicket: z.boolean().default(false),
   notOnDisplay: z.boolean().default(false),
-  bulkPullQty: z.coerce.number().min(0.01).optional(),
 }).superRefine((data, ctx) => {
   const hasComplianceFlag = data.wrongRrp || data.missingSpecialTicket || data.notOnDisplay;
   if (!hasComplianceFlag && !data.expiryDate) {
@@ -183,13 +182,12 @@ export default function Home() {
       wrongRrp: false,
       missingSpecialTicket: false,
       notOnDisplay: false,
-      bulkPullQty: undefined,
     },
   });
 
   const watchBarcode = scanForm.watch("barcode");
   const watchExpiryDate = scanForm.watch("expiryDate");
-  const watchNotOnDisplay = scanForm.watch("notOnDisplay");
+
 
   useEffect(() => {
     const refreshToday = () => {
@@ -309,7 +307,7 @@ export default function Home() {
           Array.isArray(old) ? [optimisticScan, ...old] : [optimisticScan]
         );
 
-        scanForm.reset({ barcode: "", itemNumber: "", description: "", qty: "" as unknown as number, expiryDate: "", remarks: "", wrongRrp: false, missingSpecialTicket: false, notOnDisplay: false, bulkPullQty: undefined });
+        scanForm.reset({ barcode: "", itemNumber: "", description: "", qty: "" as unknown as number, expiryDate: "", remarks: "", wrongRrp: false, missingSpecialTicket: false, notOnDisplay: false });
         setTimeout(() => { barcodeInputRef.current?.focus(); }, 50);
         toast({ title: "Scan saved", description: "Item recorded." });
 
@@ -407,7 +405,7 @@ export default function Home() {
         wrongRrp: values.wrongRrp,
         missingSpecialTicket: values.missingSpecialTicket,
         notOnDisplay: values.notOnDisplay,
-        ...(values.bulkPullQty != null ? { bulkPullQty: values.bulkPullQty } : {}),
+        ...(values.notOnDisplay ? { bulkPullQty: values.qty } : {}),
       } as any
     });
   };
@@ -512,7 +510,7 @@ export default function Home() {
       "RRP": (s as any).rrp ?? null,
       "Special Price": (s as any).specialPrice ?? null,
       "System SOH": (s as any).systemSoh ?? null,
-      "Bulk Pull Qty": (s as any).bulkPullQty ?? null,
+      "Bulk Pull Qty": (s as any).bulkPullQty ?? (s as any).qty ?? null,
       "Qty": s.qty,
       "Expiry Date": formatDateOnly(s.expiryDate),
       "Status": s.status,
@@ -906,21 +904,6 @@ export default function Home() {
                         </FormItem>
                       )}
                     />
-                    {watchNotOnDisplay && (
-                      <FormField
-                        control={scanForm.control}
-                        name="bulkPullQty"
-                        render={({ field }) => (
-                          <FormItem className="pl-7">
-                            <FormLabel className="text-zinc-700 text-sm">Bulk Pull Qty</FormLabel>
-                            <FormControl>
-                              <Input type="number" step="0.01" min="0.01" placeholder="e.g. 12" {...field} value={field.value ?? ""} className="bg-white border-zinc-200 font-mono h-9" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
                   </div>
 
                   <Button 
