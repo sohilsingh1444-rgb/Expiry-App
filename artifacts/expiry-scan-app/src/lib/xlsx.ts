@@ -11,20 +11,58 @@ function extractCellValue(v: unknown): any {
   return String(v);
 }
 
-async function readWorksheetAsAoa(file: File): Promise<any[][]> {
-  const ExcelJS = (await import('exceljs')).default;
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(await file.arrayBuffer());
-  const sheet = workbook.worksheets[0];
-  if (!sheet) return [];
-
+function parseCsvText(text: string): any[][] {
+  // Normalise line endings
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   const aoa: any[][] = [];
-  sheet.eachRow({ includeEmpty: false }, (row) => {
-    const vals = row.values as any[];
-    const rowArr: any[] = vals.slice(1).map(extractCellValue);
-    aoa.push(rowArr);
-  });
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const row: any[] = [];
+    let inQuote = false;
+    let cell = '';
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuote && line[i + 1] === '"') { cell += '"'; i++; }
+        else { inQuote = !inQuote; }
+      } else if (ch === ',' && !inQuote) {
+        row.push(cell); cell = '';
+      } else {
+        cell += ch;
+      }
+    }
+    row.push(cell);
+    aoa.push(row);
+  }
   return aoa;
+}
+
+async function readWorksheetAsAoa(file: File): Promise<any[][]> {
+  const isCsv = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
+  if (isCsv) {
+    const text = await file.text();
+    return parseCsvText(text);
+  }
+
+  try {
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await file.arrayBuffer());
+    const sheet = workbook.worksheets[0];
+    if (!sheet) return [];
+
+    const aoa: any[][] = [];
+    sheet.eachRow({ includeEmpty: false }, (row) => {
+      const vals = row.values as any[];
+      const rowArr: any[] = vals.slice(1).map(extractCellValue);
+      aoa.push(rowArr);
+    });
+    return aoa;
+  } catch {
+    // Last-resort: try treating it as CSV text
+    const text = await file.text();
+    return parseCsvText(text);
+  }
 }
 
 export async function parseBarcodeMaster(file: File): Promise<any[]> {
