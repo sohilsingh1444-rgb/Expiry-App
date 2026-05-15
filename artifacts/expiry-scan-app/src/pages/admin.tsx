@@ -203,6 +203,27 @@ export default function AdminPage() {
     }
   }
 
+  async function gzipBase64(obj: unknown): Promise<string> {
+    const jsonBytes = new TextEncoder().encode(JSON.stringify(obj));
+    const cs = new CompressionStream("gzip");
+    const writer = cs.writable.getWriter();
+    writer.write(jsonBytes);
+    writer.close();
+    const chunks: Uint8Array[] = [];
+    const reader = cs.readable.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    const merged = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+    let off = 0;
+    for (const c of chunks) { merged.set(c, off); off += c.length; }
+    let bin = "";
+    for (let i = 0; i < merged.length; i++) bin += String.fromCharCode(merged[i]);
+    return btoa(bin);
+  }
+
   async function handleBarcodeMasterUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -216,10 +237,11 @@ export default function AdminPage() {
         return;
       }
       const { map, count } = buildBarcodeMaps(rows);
+      const compressed = await gzipBase64({ map, count });
       const res = await fetch(apiUrl("/admin/barcode-master"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": pw },
-        body: JSON.stringify({ map, count }),
+        body: JSON.stringify({ compressed }),
       });
       if (res.ok) {
         const data = await res.json();
