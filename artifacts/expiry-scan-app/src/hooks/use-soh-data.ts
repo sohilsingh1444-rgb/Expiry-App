@@ -48,7 +48,7 @@ export function useSohData() {
         if (barcodeStr.endsWith('.0')) barcodeStr = barcodeStr.slice(0, -2);
         const sohNum = parseFloat(String(sohVal ?? '0').trim());
         if (!isNaN(sohNum)) {
-          map.set(barcodeStr, sohNum);
+          map.set(barcodeStr, (map.get(barcodeStr) ?? 0) + sohNum);
         }
       }
     });
