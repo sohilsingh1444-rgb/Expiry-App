@@ -1,4 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { parseBarcodeMaster, parseSohFile } from "@/lib/xlsx";
+import { buildBarcodeMaps } from "@/hooks/use-barcode-master";
+import { buildSohMaps } from "@/hooks/use-soh-data";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +34,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Trash2, Settings, LogOut, ShieldCheck, Store, Plus, Pencil, X } from "lucide-react";
+import { Trash2, Settings, LogOut, ShieldCheck, Store, Plus, Pencil, X, Upload, DatabaseZap } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { getApiBase } from "@/lib/api-base";
 
@@ -78,6 +81,14 @@ export default function AdminPage() {
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [isLoadingStores, setIsLoadingStores] = useState(false);
   const [storeDialog, setStoreDialog] = useState<{ open: boolean; editing: StoreRow | null }>({ open: false, editing: null });
+
+  type MasterMeta = { uploadedAt: string | null; count: number };
+  const [bmMeta, setBmMeta] = useState<MasterMeta>({ uploadedAt: null, count: 0 });
+  const [bmUploading, setBmUploading] = useState(false);
+  const [sohMeta, setSohMeta] = useState<MasterMeta>({ uploadedAt: null, count: 0 });
+  const [sohUploading, setSohUploading] = useState(false);
+  const bmFileRef = useRef<HTMLInputElement>(null);
+  const sohFileRef = useRef<HTMLInputElement>(null);
   const [storeCode, setStoreCode] = useState("");
   const [storeName, setStoreName] = useState("");
   const [storeRegion, setStoreRegion] = useState<"WR" | "CR" | "NR">("WR");
@@ -110,7 +121,7 @@ export default function AdminPage() {
       }
       sessionStorage.setItem("admin_pw", pw);
       setAuthed(true);
-      await Promise.all([loadSessions(pw), loadSettings(), loadStores(pw)]);
+      await Promise.all([loadSessions(pw), loadSettings(), loadStores(pw), loadMasterMeta()]);
     } catch {
       setAuthError("Connection error. Please try again.");
     } finally {
@@ -140,6 +151,15 @@ export default function AdminPage() {
       setUrgentInput(String(data.urgentDays));
       setNearExpiryInput(String(data.nearExpiryDays));
     }
+  }
+
+  async function loadMasterMeta() {
+    const [bmRes, sohRes] = await Promise.all([
+      fetch(apiUrl("/barcode-master/meta")),
+      fetch(apiUrl("/soh-data/meta")),
+    ]);
+    if (bmRes.ok) setBmMeta(await bmRes.json());
+    if (sohRes.ok) setSohMeta(await sohRes.json());
   }
 
   async function loadStores(pw: string) {
@@ -180,6 +200,96 @@ export default function AdminPage() {
       toast({ title: "Session deleted", description: "All scans in the session were removed." });
     } else {
       toast({ title: "Error", description: "Failed to delete session.", variant: "destructive" });
+    }
+  }
+
+  async function handleBarcodeMasterUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const pw = storedPassword();
+    setBmUploading(true);
+    try {
+      const rows = await parseBarcodeMaster(file);
+      if (!rows.length) {
+        toast({ title: "Empty file", description: "No rows found in the file.", variant: "destructive" });
+        return;
+      }
+      const { map, byItem, count } = buildBarcodeMaps(rows);
+      const res = await fetch(apiUrl("/admin/barcode-master"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pw },
+        body: JSON.stringify({ map, byItem, count }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBmMeta({ uploadedAt: data.uploadedAt, count: data.count });
+        toast({ title: "Barcode Master uploaded", description: `${Number(data.count).toLocaleString()} items stored. All devices will auto-load on next open.` });
+      } else {
+        const err = await res.json();
+        toast({ title: "Upload failed", description: err.error ?? "Unknown error", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Parse error", description: err instanceof Error ? err.message : "Failed to parse file.", variant: "destructive" });
+    } finally {
+      setBmUploading(false);
+    }
+  }
+
+  async function handleSohUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const pw = storedPassword();
+    setSohUploading(true);
+    try {
+      const rows = await parseSohFile(file);
+      if (!rows.length) {
+        toast({ title: "Empty file", description: "No rows found in the file.", variant: "destructive" });
+        return;
+      }
+      const { byBarcode, byItem, count } = buildSohMaps(rows);
+      const res = await fetch(apiUrl("/admin/soh-data"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pw },
+        body: JSON.stringify({ byBarcode, byItem, count }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSohMeta({ uploadedAt: data.uploadedAt, count: data.count });
+        toast({ title: "SOH Data uploaded", description: `${Number(data.count).toLocaleString()} items stored. All devices will auto-load on next open.` });
+      } else {
+        const err = await res.json();
+        toast({ title: "Upload failed", description: err.error ?? "Unknown error", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Parse error", description: err instanceof Error ? err.message : "Failed to parse file.", variant: "destructive" });
+    } finally {
+      setSohUploading(false);
+    }
+  }
+
+  async function handleClearBm() {
+    const pw = storedPassword();
+    const res = await fetch(apiUrl("/admin/barcode-master"), {
+      method: "DELETE",
+      headers: { "x-admin-password": pw },
+    });
+    if (res.ok) {
+      setBmMeta({ uploadedAt: null, count: 0 });
+      toast({ title: "Barcode Master cleared", description: "Removed from server. Devices will fall back to local uploads." });
+    }
+  }
+
+  async function handleClearSoh() {
+    const pw = storedPassword();
+    const res = await fetch(apiUrl("/admin/soh-data"), {
+      method: "DELETE",
+      headers: { "x-admin-password": pw },
+    });
+    if (res.ok) {
+      setSohMeta({ uploadedAt: null, count: 0 });
+      toast({ title: "SOH Data cleared", description: "Removed from server. Devices will fall back to local uploads." });
     }
   }
 
@@ -521,6 +631,172 @@ export default function AdminPage() {
                 </Table>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* ── Master Data ── */}
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <DatabaseZap className="h-4 w-4 text-amber-500" />
+              <CardTitle className="text-white text-base">Master Data</CardTitle>
+            </div>
+            <CardDescription className="text-zinc-400">
+              Upload once here — all devices auto-load the latest file on next open. No manual uploads needed at each store.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+
+            {/* Barcode Master */}
+            <div className="rounded-lg border border-zinc-800 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-white font-medium text-sm">Barcode Master</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">
+                    Item descriptions, RRP and special prices by region (CRWR / NR)
+                  </p>
+                </div>
+                {bmMeta.uploadedAt ? (
+                  <span className="text-xs bg-emerald-900/40 text-emerald-400 border border-emerald-800 rounded px-2 py-0.5 whitespace-nowrap shrink-0">
+                    {bmMeta.count.toLocaleString()} items
+                  </span>
+                ) : (
+                  <span className="text-xs bg-zinc-800 text-zinc-500 border border-zinc-700 rounded px-2 py-0.5 whitespace-nowrap shrink-0">
+                    Not uploaded
+                  </span>
+                )}
+              </div>
+
+              {bmMeta.uploadedAt && (
+                <p className="text-zinc-500 text-xs">
+                  Last uploaded: {format(new Date(bmMeta.uploadedAt), "dd/MM/yyyy HH:mm")}
+                </p>
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  ref={bmFileRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={handleBarcodeMasterUpload}
+                />
+                <Button
+                  size="sm"
+                  className="bg-amber-600 hover:bg-amber-500 text-white h-8"
+                  disabled={bmUploading}
+                  onClick={() => bmFileRef.current?.click()}
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1.5" />
+                  {bmUploading ? "Uploading…" : bmMeta.uploadedAt ? "Replace File" : "Upload File"}
+                </Button>
+                {bmMeta.uploadedAt && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-zinc-500 hover:text-red-400 hover:bg-red-950/30 text-xs"
+                        disabled={bmUploading}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />
+                        Clear
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-zinc-900 border-zinc-700">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="text-white">Clear Barcode Master?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-zinc-400">
+                          This removes the server-side Barcode Master. Devices will fall back to their local uploads until a new file is uploaded here.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClearBm} className="bg-red-600 hover:bg-red-700 text-white">
+                          Clear
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+            </div>
+
+            {/* SOH Data */}
+            <div className="rounded-lg border border-zinc-800 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-white font-medium text-sm">System SOH (Stock on Hand)</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">
+                    Current stock quantities used to calculate bulk pull quantities
+                  </p>
+                </div>
+                {sohMeta.uploadedAt ? (
+                  <span className="text-xs bg-emerald-900/40 text-emerald-400 border border-emerald-800 rounded px-2 py-0.5 whitespace-nowrap shrink-0">
+                    {sohMeta.count.toLocaleString()} items
+                  </span>
+                ) : (
+                  <span className="text-xs bg-zinc-800 text-zinc-500 border border-zinc-700 rounded px-2 py-0.5 whitespace-nowrap shrink-0">
+                    Not uploaded
+                  </span>
+                )}
+              </div>
+
+              {sohMeta.uploadedAt && (
+                <p className="text-zinc-500 text-xs">
+                  Last uploaded: {format(new Date(sohMeta.uploadedAt), "dd/MM/yyyy HH:mm")}
+                </p>
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  ref={sohFileRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={handleSohUpload}
+                />
+                <Button
+                  size="sm"
+                  className="bg-amber-600 hover:bg-amber-500 text-white h-8"
+                  disabled={sohUploading}
+                  onClick={() => sohFileRef.current?.click()}
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1.5" />
+                  {sohUploading ? "Uploading…" : sohMeta.uploadedAt ? "Replace File" : "Upload File"}
+                </Button>
+                {sohMeta.uploadedAt && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-zinc-500 hover:text-red-400 hover:bg-red-950/30 text-xs"
+                        disabled={sohUploading}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />
+                        Clear
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-zinc-900 border-zinc-700">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="text-white">Clear SOH Data?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-zinc-400">
+                          This removes the server-side SOH data. Devices will fall back to their local uploads until a new file is uploaded here.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClearSoh} className="bg-red-600 hover:bg-red-700 text-white">
+                          Clear
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+            </div>
+
           </CardContent>
         </Card>
 
