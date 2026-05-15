@@ -221,7 +221,7 @@ export default function Home() {
   useEffect(() => {
     if (watchBarcode && watchBarcode.length > 3) {
       const storeRegion = setupData?.storeLocation ? getStoreRegion(setupData.storeLocation) : undefined;
-      const match = lookupBarcode(watchBarcode, storeRegion);
+      const match = lookupBarcode(watchBarcode, storeRegion, watchItemNumber);
       if (match) {
         setMatchedItem(match);
         if (!scanForm.getValues("itemNumber")) {
