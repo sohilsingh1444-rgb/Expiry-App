@@ -12,16 +12,14 @@ export function useSohData() {
     try {
       const stored = localStorage.getItem(SOH_STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
         setSohData(new Map<string, number>(
-          Object.entries(parsed).map(([k, v]) => [k, Number(v)])
+          Object.entries(JSON.parse(stored)).map(([k, v]) => [k, Number(v)])
         ));
       }
       const storedByItem = localStorage.getItem(SOH_ITEM_STORAGE_KEY);
       if (storedByItem) {
-        const parsed = JSON.parse(storedByItem);
         setSohByItem(new Map<string, number>(
-          Object.entries(parsed).map(([k, v]) => [k, Number(v)])
+          Object.entries(JSON.parse(storedByItem)).map(([k, v]) => [k, Number(v)])
         ));
       }
     } catch (e) {
@@ -37,7 +35,6 @@ export function useSohData() {
     const mapByBarcode = new Map<string, number>();
     const mapByItem = new Map<string, number>();
 
-    // Detect columns from first row
     const firstRow = rows[0];
     const keys = Object.keys(firstRow);
 
@@ -50,56 +47,49 @@ export function useSohData() {
 
     const barcodeCol = findCol(['barcode', 'upc', 'ean', 'gtin', 'code']);
     const itemCol    = findCol(['itemno', 'itemnum', 'itemnumber', 'itemcode', 'article', 'sku', 'item']);
-    const sohCol     = findCol(['soh', 'stockonhand', 'stock', 'onhand', 'available', 'totalqty', 'totalstock', 'balanceqty', 'qtyonhand', 'availqty', 'quantity', 'qty']);
+    const sohCol     = findCol(['soh', 'stockonhand', 'stock', 'onhand', 'available', 'totalqty',
+                                'totalstock', 'balanceqty', 'qtyonhand', 'availqty', 'quantity', 'qty']);
+
+    // Determine which column index is the identifier so we can skip it in numeric fallback
+    const identifierKey = barcodeCol ?? itemCol ?? keys[0];
+    const identifierIdx = keys.indexOf(identifierKey);
 
     rows.forEach(row => {
-      // Resolve SOH value: try named column first, then first numeric value in row
+      // SOH value: named column first, then first numeric value that isn't the identifier column
       let sohNum: number;
       if (sohCol) {
         sohNum = parseFloat(String(row[sohCol] ?? '').trim());
       } else {
-        // Find the first numeric value in the row (skip the identifier columns)
-        const numeric = Object.values(row)
-          .map(v => parseFloat(String(v ?? '').trim()))
+        const numeric = Object.entries(row)
+          .filter(([k]) => k !== identifierKey)
+          .map(([, v]) => parseFloat(String(v ?? '').trim()))
           .find(n => !isNaN(n) && isFinite(n));
         sohNum = numeric ?? NaN;
       }
       if (isNaN(sohNum)) return;
 
-      // Resolve barcode
-      const rawBarcode = barcodeCol ? row[barcodeCol] : Object.values(row)[0];
+      const rawBarcode = barcodeCol ? row[barcodeCol] : (identifierIdx === 0 ? undefined : Object.values(row)[0]);
       if (rawBarcode != null && rawBarcode !== '') {
         let barcodeStr = String(rawBarcode).trim();
         if (barcodeStr.endsWith('.0')) barcodeStr = barcodeStr.slice(0, -2);
-        if (barcodeStr) {
-          mapByBarcode.set(barcodeStr, (mapByBarcode.get(barcodeStr) ?? 0) + sohNum);
-        }
+        if (barcodeStr) mapByBarcode.set(barcodeStr, (mapByBarcode.get(barcodeStr) ?? 0) + sohNum);
       }
 
-      // Resolve item number
-      const rawItemNo = itemCol ? row[itemCol] : (barcodeCol ? undefined : Object.values(row)[0]);
+      const rawItemNo = itemCol ? row[itemCol] : Object.values(row)[identifierIdx >= 0 ? identifierIdx : 0];
       if (rawItemNo != null && rawItemNo !== '') {
         let itemStr = String(rawItemNo).trim();
         if (itemStr.endsWith('.0')) itemStr = itemStr.slice(0, -2);
-        if (itemStr) {
-          mapByItem.set(itemStr, (mapByItem.get(itemStr) ?? 0) + sohNum);
-        }
+        if (itemStr) mapByItem.set(itemStr, (mapByItem.get(itemStr) ?? 0) + sohNum);
       }
     });
 
     setSohData(mapByBarcode);
     setSohByItem(mapByItem);
 
-    try {
-      localStorage.setItem(SOH_STORAGE_KEY, JSON.stringify(Object.fromEntries(mapByBarcode)));
-    } catch (e) {
-      console.error('Failed to save SOH barcode data to local storage', e);
-    }
-    try {
-      localStorage.setItem(SOH_ITEM_STORAGE_KEY, JSON.stringify(Object.fromEntries(mapByItem)));
-    } catch (e) {
-      console.error('Failed to save SOH item data to local storage', e);
-    }
+    try { localStorage.setItem(SOH_STORAGE_KEY, JSON.stringify(Object.fromEntries(mapByBarcode))); }
+    catch (e) { console.error('Failed to save SOH barcode data to local storage', e); }
+    try { localStorage.setItem(SOH_ITEM_STORAGE_KEY, JSON.stringify(Object.fromEntries(mapByItem))); }
+    catch (e) { console.error('Failed to save SOH item data to local storage', e); }
   }, []);
 
   const clearSohData = useCallback(() => {
@@ -110,19 +100,17 @@ export function useSohData() {
   }, []);
 
   const lookupSoh = useCallback((barcode: string, itemNumber?: string): number | undefined => {
-    let normalizedBarcode = String(barcode).trim();
-    if (normalizedBarcode.endsWith('.0')) normalizedBarcode = normalizedBarcode.slice(0, -2);
-
-    const byBarcode = sohData.get(normalizedBarcode);
+    let nb = String(barcode).trim();
+    if (nb.endsWith('.0')) nb = nb.slice(0, -2);
+    const byBarcode = sohData.get(nb);
     if (byBarcode != null) return byBarcode;
 
     if (itemNumber) {
-      let normalizedItem = String(itemNumber).trim();
-      if (normalizedItem.endsWith('.0')) normalizedItem = normalizedItem.slice(0, -2);
-      const byItem = sohByItem.get(normalizedItem);
+      let ni = String(itemNumber).trim();
+      if (ni.endsWith('.0')) ni = ni.slice(0, -2);
+      const byItem = sohByItem.get(ni);
       if (byItem != null) return byItem;
     }
-
     return undefined;
   }, [sohData, sohByItem]);
 
