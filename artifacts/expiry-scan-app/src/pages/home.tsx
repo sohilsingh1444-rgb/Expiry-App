@@ -163,7 +163,8 @@ export default function Home() {
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const { masterData, isLoaded, saveMasterData, clearMasterData, lookupBarcode } = useBarcodeMaster();
-  const { sohData, saveSohData, clearSohData, lookupSoh } = useSohData();
+  const { sohData, sohByItem, saveSohData, clearSohData, lookupSoh } = useSohData();
+  const totalSohItems = Math.max(sohData.size, sohByItem.size);
   const { stores: storeList, getStoreByCode, getStoreRegion } = useStoreList();
 
   const setupForm = useForm<z.infer<typeof setupSchema>>({
@@ -795,7 +796,7 @@ export default function Home() {
                   />
                   
                   {/* Matched item info panel */}
-                  {matchedItem && (matchedItem.rrp || matchedItem.special || matchedItem.soh || sohData.size > 0) && (
+                  {matchedItem && (matchedItem.rrp || matchedItem.special || matchedItem.soh || totalSohItems > 0) && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-1.5 text-sm">
                       <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Item Data</div>
                       <div className="grid grid-cols-2 gap-2 text-center">
@@ -817,7 +818,7 @@ export default function Home() {
                             <div className="font-bold text-blue-700">{matchedItem.soh}</div>
                           </div>
                         )}
-                        {sohData.size > 0 && (
+                        {totalSohItems > 0 && (
                           <div className={`bg-white rounded-md border px-2 py-1.5 ${lookupSoh(watchBarcode, watchItemNumber) != null ? 'border-purple-100' : 'border-zinc-100'}`}>
                             <div className="text-xs text-zinc-500">System SOH</div>
                             {lookupSoh(watchBarcode, watchItemNumber) != null
@@ -1030,7 +1031,7 @@ export default function Home() {
             <CardContent className="pt-4 space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-zinc-500">Loaded items:</span>
-                <span className="font-bold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">{sohData.size.toLocaleString()}</span>
+                <span className="font-bold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">{totalSohItems.toLocaleString()}</span>
               </div>
 
               <div className="flex gap-2">
@@ -1046,14 +1047,14 @@ export default function Home() {
                     <Upload className="w-3.5 h-3.5 mr-2" /> Upload SOH file
                   </Button>
                 </div>
-                {sohData.size > 0 && (
+                {totalSohItems > 0 && (
                   <Button variant="ghost" className="text-destructive hover:bg-destructive/10 text-sm" onClick={clearSohData}>
                     Clear
                   </Button>
                 )}
               </div>
 
-              {sohData.size === 0 && (
+              {totalSohItems === 0 && (
                 <Alert className="bg-purple-50 border-purple-200 text-purple-800 py-2">
                   <AlertCircle className="w-4 h-4 text-purple-600" />
                   <AlertDescription className="text-xs ml-2">
