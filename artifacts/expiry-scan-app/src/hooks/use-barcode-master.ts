@@ -14,18 +14,22 @@ export type BarcodeMasterRow = {
 };
 
 const STORAGE_KEY = 'expiry-scan-barcode-master';
+const ITEM_INDEX_KEY = 'expiry-scan-barcode-master-by-item';
 
 export function useBarcodeMaster() {
   const [masterData, setMasterData] = useState<Map<string, BarcodeMasterRow>>(new Map());
+  const [masterByItem, setMasterByItem] = useState<Map<string, BarcodeMasterRow>>(new Map());
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
-        const map = new Map<string, BarcodeMasterRow>(Object.entries(parsed));
-        setMasterData(map);
+        setMasterData(new Map<string, BarcodeMasterRow>(Object.entries(JSON.parse(stored))));
+      }
+      const storedByItem = localStorage.getItem(ITEM_INDEX_KEY);
+      if (storedByItem) {
+        setMasterByItem(new Map<string, BarcodeMasterRow>(Object.entries(JSON.parse(storedByItem))));
       }
     } catch (e) {
       console.error('Failed to load barcode master from local storage', e);
@@ -36,6 +40,8 @@ export function useBarcodeMaster() {
 
   const saveMasterData = useCallback((rows: any[]) => {
     const map = new Map<string, BarcodeMasterRow>();
+    const byItem = new Map<string, BarcodeMasterRow>();
+
     rows.forEach(row => {
       const keys = Object.keys(row);
 
@@ -66,15 +72,13 @@ export function useBarcodeMaster() {
       const special_CRWR =
         getVal('offerprice_crwr', 'offer_crwr', 'special_crwr', 'promo_crwr') ||
         getVal('special', 'specialprice', 'promo', 'sale', 'offerprice', 'offer');
-      const rrp_NR =
-        getVal('rrp_nr', 'retailprice_nr', 'price_nr');
-      const special_NR =
-        getVal('offerprice_nr', 'offer_nr', 'special_nr', 'promo_nr');
+      const rrp_NR = getVal('rrp_nr', 'retailprice_nr', 'price_nr');
+      const special_NR = getVal('offerprice_nr', 'offer_nr', 'special_nr', 'promo_nr');
 
       if (rawBarcode) {
         let barcodeStr = String(rawBarcode).trim();
         if (barcodeStr.endsWith('.0')) barcodeStr = barcodeStr.slice(0, -2);
-        map.set(barcodeStr, {
+        const entry: BarcodeMasterRow = {
           barcode: barcodeStr,
           itemNumber: String(itemNumber || '').trim(),
           description: String(description || '').trim(),
@@ -85,28 +89,52 @@ export function useBarcodeMaster() {
           rrp_NR: rrp_NR || undefined,
           special_NR: special_NR || undefined,
           soh: soh || undefined,
-        });
+        };
+        map.set(barcodeStr, entry);
+
+        // Also index by item number for RRP fallback
+        if (entry.itemNumber) {
+          byItem.set(entry.itemNumber, entry);
+        }
       }
     });
 
     setMasterData(map);
+    setMasterByItem(byItem);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(map)));
     } catch (e) {
       console.error('Failed to save barcode master to local storage', e);
     }
+    try {
+      localStorage.setItem(ITEM_INDEX_KEY, JSON.stringify(Object.fromEntries(byItem)));
+    } catch (e) {
+      console.error('Failed to save barcode master item index to local storage', e);
+    }
   }, []);
 
   const clearMasterData = useCallback(() => {
     setMasterData(new Map());
+    setMasterByItem(new Map());
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(ITEM_INDEX_KEY);
   }, []);
 
-  const lookupBarcode = useCallback((barcode: string, region?: string): BarcodeMasterRow | undefined => {
+  const lookupBarcode = useCallback((barcode: string, region?: string, itemNumber?: string): BarcodeMasterRow | undefined => {
     let normalized = String(barcode).trim();
     if (normalized.endsWith('.0')) normalized = normalized.slice(0, -2);
-    const row = masterData.get(normalized);
+
+    let row = masterData.get(normalized);
+
+    // Fallback: try item number index if barcode not found
+    if (!row && itemNumber) {
+      let ni = String(itemNumber).trim();
+      if (ni.endsWith('.0')) ni = ni.slice(0, -2);
+      row = masterByItem.get(ni);
+    }
+
     if (!row) return undefined;
+
     if (region) {
       const isNR = region.toUpperCase() === 'NR';
       return {
@@ -116,7 +144,7 @@ export function useBarcodeMaster() {
       };
     }
     return row;
-  }, [masterData]);
+  }, [masterData, masterByItem]);
 
   return {
     masterData,
