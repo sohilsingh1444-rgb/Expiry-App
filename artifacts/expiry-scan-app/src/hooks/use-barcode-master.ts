@@ -54,46 +54,47 @@ export function useBarcodeMaster() {
         return key ? String(row[key] ?? '').trim() : '';
       };
 
-      let rawBarcode = getVal('barcode', 'upc', 'ean', 'gtin') || row['Barcode'] || row['barcode'];
-      let itemNumber = getVal('itemno', 'item', 'sku', 'article') || row['ItemNumber'] || row['itemNumber'];
-      let description = getVal('desc', 'name', 'product') || row['Description'] || row['description'];
-      let soh = getVal('soh', 'stockonhand', 'stock', 'onhand');
-
-      if (!rawBarcode && Object.values(row).length > 0) {
-        const vals = Object.values(row);
-        rawBarcode = vals[0];
-        itemNumber = String(vals[1] || '');
-        description = String(vals[2] || '');
-      }
+      const rawBarcode = getVal('barcode', 'upc', 'ean', 'gtin');
+      const itemNumber = getVal('itemno', 'item', 'sku', 'article', 'itemnum', 'itemnumber', 'itemcode');
+      const description = getVal('desc', 'description', 'name', 'product');
+      const soh = getVal('soh', 'stockonhand', 'stock', 'onhand');
 
       const rrp_CRWR =
         getVal('rrp_crwr', 'retailprice_crwr', 'price_crwr') ||
         getVal('rrp', 'retailprice', 'retail');
       const special_CRWR =
-        getVal('offerprice_crwr', 'offer_crwr', 'special_crwr', 'promo_crwr') ||
-        getVal('special', 'specialprice', 'promo', 'sale', 'offerprice', 'offer');
-      const rrp_NR = getVal('rrp_nr', 'retailprice_nr', 'price_nr');
-      const special_NR = getVal('offerprice_nr', 'offer_nr', 'special_nr', 'promo_nr');
+        getVal('offerprice_crwr', 'offer_crwr', 'special_crwr', 'promo_crwr', 'saleprice_crwr') ||
+        getVal('special', 'specialprice', 'promo', 'sale', 'offerprice', 'offer', 'saleprice');
+      const rrp_NR =
+        getVal('rrp_nr', 'retailprice_nr', 'price_nr') ||
+        (!rawBarcode && !getVal('rrp_crwr', 'retailprice_crwr', 'price_crwr') ? '' : '');
+      const special_NR =
+        getVal('offerprice_nr', 'offer_nr', 'special_nr', 'promo_nr', 'saleprice_nr');
 
-      if (rawBarcode) {
-        let barcodeStr = String(rawBarcode).trim();
-        if (barcodeStr.endsWith('.0')) barcodeStr = barcodeStr.slice(0, -2);
-        const entry: BarcodeMasterRow = {
-          barcode: barcodeStr,
-          itemNumber: String(itemNumber || '').trim(),
-          description: String(description || '').trim(),
-          rrp: rrp_CRWR || undefined,
-          special: special_CRWR || undefined,
-          rrp_CRWR: rrp_CRWR || undefined,
-          special_CRWR: special_CRWR || undefined,
-          rrp_NR: rrp_NR || undefined,
-          special_NR: special_NR || undefined,
-          soh: soh || undefined,
-        };
-        map.set(barcodeStr, entry);
+      const entry: BarcodeMasterRow = {
+        barcode: rawBarcode ? String(rawBarcode).trim().replace(/\.0$/, '') : '',
+        itemNumber: String(itemNumber || '').trim().replace(/\.0$/, ''),
+        description: String(description || '').trim(),
+        rrp: rrp_CRWR || undefined,
+        special: special_CRWR || undefined,
+        rrp_CRWR: rrp_CRWR || undefined,
+        special_CRWR: special_CRWR || undefined,
+        rrp_NR: rrp_NR || undefined,
+        special_NR: special_NR || undefined,
+        soh: soh || undefined,
+      };
 
-        // Also index by item number for RRP fallback
-        if (entry.itemNumber) {
+      // Index by barcode if present
+      if (entry.barcode) {
+        map.set(entry.barcode, entry);
+      }
+
+      // Always index by item number if present — this is the primary key for
+      // promo/pricing files that have no barcode column
+      if (entry.itemNumber) {
+        // Keep entry with highest/latest RRP if item appears multiple times
+        const existing = byItem.get(entry.itemNumber);
+        if (!existing || (entry.rrp && !existing.rrp)) {
           byItem.set(entry.itemNumber, entry);
         }
       }
