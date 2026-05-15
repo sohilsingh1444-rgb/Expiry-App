@@ -7,8 +7,11 @@ const router: IRouter = Router();
 
 function checkAdminPassword(req: Request, res: Response): boolean {
   const adminPassword = process.env.ADMIN_PASSWORD;
+  const itPassword = process.env.IT_PASSWORD;
   const provided = req.headers["x-admin-password"] as string | undefined;
-  if (!adminPassword || provided !== adminPassword) {
+  const validAdmin = adminPassword && provided === adminPassword;
+  const validIt = itPassword && provided === itPassword;
+  if (!validAdmin && !validIt) {
     res.status(401).json({ error: "Unauthorized" });
     return false;
   }
