@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export type BarcodeMasterRow = {
   barcode: string;
@@ -34,7 +34,7 @@ export function useBarcodeMaster() {
     }
   }, []);
 
-  const saveMasterData = (rows: any[]) => {
+  const saveMasterData = useCallback((rows: any[]) => {
     const map = new Map<string, BarcodeMasterRow>();
     rows.forEach(row => {
       const keys = Object.keys(row);
@@ -95,14 +95,14 @@ export function useBarcodeMaster() {
     } catch (e) {
       console.error('Failed to save barcode master to local storage', e);
     }
-  };
+  }, []);
 
-  const clearMasterData = () => {
+  const clearMasterData = useCallback(() => {
     setMasterData(new Map());
     localStorage.removeItem(STORAGE_KEY);
-  };
+  }, []);
 
-  const lookupBarcode = (barcode: string, region?: string): BarcodeMasterRow | undefined => {
+  const lookupBarcode = useCallback((barcode: string, region?: string): BarcodeMasterRow | undefined => {
     let normalized = String(barcode).trim();
     if (normalized.endsWith('.0')) normalized = normalized.slice(0, -2);
     const row = masterData.get(normalized);
@@ -116,7 +116,7 @@ export function useBarcodeMaster() {
       };
     }
     return row;
-  };
+  }, [masterData]);
 
   return {
     masterData,
