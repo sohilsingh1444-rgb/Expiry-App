@@ -50,32 +50,35 @@ export function useSohData() {
     const sohCol     = findCol(['soh', 'stockonhand', 'stock', 'onhand', 'available', 'totalqty',
                                 'totalstock', 'balanceqty', 'qtyonhand', 'availqty', 'quantity', 'qty']);
 
-    // Determine which column index is the identifier so we can skip it in numeric fallback
-    const identifierKey = barcodeCol ?? itemCol ?? keys[0];
-    const identifierIdx = keys.indexOf(identifierKey);
+    // Identifier columns — exclude ALL of these when searching for a numeric SOH fallback
+    const identifierCols = new Set<string>([
+      ...(barcodeCol ? [barcodeCol] : []),
+      ...(itemCol ? [itemCol] : []),
+      ...(!barcodeCol && !itemCol ? [keys[0]] : []),
+    ]);
 
     rows.forEach(row => {
-      // SOH value: named column first, then first numeric value that isn't the identifier column
+      // SOH value: named column first, then first numeric value that is NOT an identifier column
       let sohNum: number;
       if (sohCol) {
         sohNum = parseFloat(String(row[sohCol] ?? '').trim());
       } else {
         const numeric = Object.entries(row)
-          .filter(([k]) => k !== identifierKey)
+          .filter(([k]) => !identifierCols.has(k))
           .map(([, v]) => parseFloat(String(v ?? '').trim()))
-          .find(n => !isNaN(n) && isFinite(n));
+          .find(n => !isNaN(n) && isFinite(n) && n < 1_000_000);
         sohNum = numeric ?? NaN;
       }
       if (isNaN(sohNum)) return;
 
-      const rawBarcode = barcodeCol ? row[barcodeCol] : (identifierIdx === 0 ? undefined : Object.values(row)[0]);
+      const rawBarcode = barcodeCol ? row[barcodeCol] : undefined;
       if (rawBarcode != null && rawBarcode !== '') {
         let barcodeStr = String(rawBarcode).trim();
         if (barcodeStr.endsWith('.0')) barcodeStr = barcodeStr.slice(0, -2);
         if (barcodeStr) mapByBarcode.set(barcodeStr, (mapByBarcode.get(barcodeStr) ?? 0) + sohNum);
       }
 
-      const rawItemNo = itemCol ? row[itemCol] : Object.values(row)[identifierIdx >= 0 ? identifierIdx : 0];
+      const rawItemNo = itemCol ? row[itemCol] : Object.values(row)[0];
       if (rawItemNo != null && rawItemNo !== '') {
         let itemStr = String(rawItemNo).trim();
         if (itemStr.endsWith('.0')) itemStr = itemStr.slice(0, -2);
