@@ -49,19 +49,29 @@ router.get("/barcode-master", async (_req, res): Promise<void> => {
 
 router.post("/admin/barcode-master", async (req, res): Promise<void> => {
   if (!checkAdminPassword(req, res)) return;
-  const { map, byItem, count } = req.body as {
+  const { map, count } = req.body as {
     map?: Record<string, unknown>;
-    byItem?: Record<string, unknown>;
     count?: number;
   };
   if (!map || typeof map !== "object") {
     res.status(400).json({ error: "map is required" });
     return;
   }
+  // Build byItem server-side: one entry per itemNumber, preferring entries with RRP
+  const byItem: Record<string, unknown> = {};
+  for (const entry of Object.values(map)) {
+    const e = entry as { itemNumber?: string; rrp?: string };
+    if (e.itemNumber) {
+      const existing = byItem[e.itemNumber] as { rrp?: string } | undefined;
+      if (!existing || (e.rrp && !existing.rrp)) {
+        byItem[e.itemNumber] = entry;
+      }
+    }
+  }
   const now = new Date().toISOString();
-  const itemCount = count ?? Math.max(Object.keys(map).length, Object.keys(byItem ?? {}).length);
+  const itemCount = count ?? Object.keys(map).length;
   await setSetting("bm_map_json", JSON.stringify(map));
-  await setSetting("bm_by_item_json", JSON.stringify(byItem ?? {}));
+  await setSetting("bm_by_item_json", JSON.stringify(byItem));
   await setSetting("bm_uploaded_at", now);
   await setSetting("bm_count", String(itemCount));
   res.json({ ok: true, uploadedAt: now, count: itemCount });
