@@ -49,7 +49,7 @@ export function useSohData() {
       };
 
       const rawBarcode =
-        getVal(['barcode', 'upc', 'ean', 'gtin']) ??
+        getVal(['barcode', 'upc', 'ean', 'gtin', 'code']) ??
         Object.values(row)[0];
       const rawItemNo =
         getVal(['itemno', 'itemnum', 'itemnumber', 'itemcode', 'article', 'sku', 'item']) ??
@@ -117,5 +117,5 @@ export function useSohData() {
     return undefined;
   }, [sohData, sohByItem]);
 
-  return { sohData, isLoaded, saveSohData, clearSohData, lookupSoh };
+  return { sohData, sohByItem, isLoaded, saveSohData, clearSohData, lookupSoh };
 }
