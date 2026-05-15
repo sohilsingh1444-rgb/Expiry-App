@@ -215,22 +215,25 @@ export default function AdminPage() {
         toast({ title: "Empty file", description: "No rows found in the file.", variant: "destructive" });
         return;
       }
-      const { map, byItem, count } = buildBarcodeMaps(rows);
+      const { map, count } = buildBarcodeMaps(rows);
       const res = await fetch(apiUrl("/admin/barcode-master"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": pw },
-        body: JSON.stringify({ map, byItem, count }),
+        body: JSON.stringify({ map, count }),
       });
       if (res.ok) {
         const data = await res.json();
         setBmMeta({ uploadedAt: data.uploadedAt, count: data.count });
         toast({ title: "Barcode Master uploaded", description: `${Number(data.count).toLocaleString()} items stored. All devices will auto-load on next open.` });
       } else {
-        const err = await res.json();
-        toast({ title: "Upload failed", description: err.error ?? "Unknown error", variant: "destructive" });
+        const text = await res.text();
+        let errMsg = `Upload failed (${res.status})`;
+        if (res.status === 413) errMsg = "File is too large to upload. Try exporting only essential columns.";
+        else { try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { /* non-JSON */ } }
+        toast({ title: "Upload failed", description: errMsg, variant: "destructive" });
       }
     } catch (err) {
-      toast({ title: "Parse error", description: err instanceof Error ? err.message : "Failed to parse file.", variant: "destructive" });
+      toast({ title: "Upload error", description: err instanceof Error ? err.message : "Failed to read or upload file.", variant: "destructive" });
     } finally {
       setBmUploading(false);
     }
@@ -259,11 +262,14 @@ export default function AdminPage() {
         setSohMeta({ uploadedAt: data.uploadedAt, count: data.count });
         toast({ title: "SOH Data uploaded", description: `${Number(data.count).toLocaleString()} items stored. All devices will auto-load on next open.` });
       } else {
-        const err = await res.json();
-        toast({ title: "Upload failed", description: err.error ?? "Unknown error", variant: "destructive" });
+        const text = await res.text();
+        let errMsg = `Upload failed (${res.status})`;
+        if (res.status === 413) errMsg = "File is too large to upload. Try exporting only essential columns.";
+        else { try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { /* non-JSON */ } }
+        toast({ title: "Upload failed", description: errMsg, variant: "destructive" });
       }
     } catch (err) {
-      toast({ title: "Parse error", description: err instanceof Error ? err.message : "Failed to parse file.", variant: "destructive" });
+      toast({ title: "Upload error", description: err instanceof Error ? err.message : "Failed to read or upload file.", variant: "destructive" });
     } finally {
       setSohUploading(false);
     }
