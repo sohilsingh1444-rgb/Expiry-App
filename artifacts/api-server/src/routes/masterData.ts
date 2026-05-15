@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
+import { gunzipSync } from "zlib";
 import { db, appSettingsTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -49,14 +50,31 @@ router.get("/barcode-master", async (_req, res): Promise<void> => {
 
 router.post("/admin/barcode-master", async (req, res): Promise<void> => {
   if (!checkAdminPassword(req, res)) return;
-  const { map, count } = req.body as {
-    map?: Record<string, unknown>;
-    count?: number;
-  };
-  if (!map || typeof map !== "object") {
+  const body = req.body as { compressed?: string; map?: Record<string, unknown>; count?: number };
+
+  let map: Record<string, unknown>;
+  let count: number | undefined;
+
+  if (body.compressed) {
+    try {
+      const buf = Buffer.from(body.compressed, "base64");
+      const parsed = JSON.parse(gunzipSync(buf).toString()) as { map: Record<string, unknown>; count?: number };
+      map = parsed.map;
+      count = parsed.count;
+    } catch {
+      res.status(400).json({ error: "Failed to decompress payload" });
+      return;
+    }
+  } else {
+    map = body.map ?? {};
+    count = body.count;
+  }
+
+  if (!map || typeof map !== "object" || Object.keys(map).length === 0) {
     res.status(400).json({ error: "map is required" });
     return;
   }
+
   // Build byItem server-side: one entry per itemNumber, preferring entries with RRP
   const byItem: Record<string, unknown> = {};
   for (const entry of Object.values(map)) {
