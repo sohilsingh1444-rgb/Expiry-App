@@ -218,17 +218,20 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
+  const scanSetValue = scanForm.setValue;
+  const scanGetValues = scanForm.getValues;
+
   useEffect(() => {
     if (watchBarcode && watchBarcode.length > 3) {
       const storeRegion = setupData?.storeLocation ? getStoreRegion(setupData.storeLocation) : undefined;
-      const match = lookupBarcode(watchBarcode, storeRegion, watchItemNumber);
+      const match = lookupBarcode(watchBarcode, storeRegion, scanGetValues("itemNumber"));
       if (match) {
         setMatchedItem(match);
-        if (!scanForm.getValues("itemNumber")) {
-          scanForm.setValue("itemNumber", match.itemNumber);
+        if (!scanGetValues("itemNumber")) {
+          scanSetValue("itemNumber", match.itemNumber);
         }
-        if (!scanForm.getValues("description")) {
-          scanForm.setValue("description", match.description);
+        if (!scanGetValues("description")) {
+          scanSetValue("description", match.description);
         }
       } else {
         setMatchedItem(null);
@@ -236,11 +239,12 @@ export default function Home() {
     } else {
       setMatchedItem(null);
       if (!watchBarcode) {
-        scanForm.setValue("itemNumber", "");
-        scanForm.setValue("description", "");
+        scanSetValue("itemNumber", "");
+        scanSetValue("description", "");
       }
     }
-  }, [watchBarcode, lookupBarcode, scanForm]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchBarcode, lookupBarcode]);
 
   useEffect(() => {
     const ping = () => fetch(`${API_BASE}/api/healthz`, { method: "GET" }).catch(() => {});
