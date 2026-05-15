@@ -13,18 +13,16 @@ export function useSohData() {
       const stored = localStorage.getItem(SOH_STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        const map = new Map<string, number>(
+        setSohData(new Map<string, number>(
           Object.entries(parsed).map(([k, v]) => [k, Number(v)])
-        );
-        setSohData(map);
+        ));
       }
       const storedByItem = localStorage.getItem(SOH_ITEM_STORAGE_KEY);
       if (storedByItem) {
         const parsed = JSON.parse(storedByItem);
-        const map = new Map<string, number>(
+        setSohByItem(new Map<string, number>(
           Object.entries(parsed).map(([k, v]) => [k, Number(v)])
-        );
-        setSohByItem(map);
+        ));
       }
     } catch (e) {
       console.error('Failed to load SOH data from local storage', e);
@@ -34,34 +32,43 @@ export function useSohData() {
   }, []);
 
   const saveSohData = useCallback((rows: any[]) => {
+    if (!rows.length) return;
+
     const mapByBarcode = new Map<string, number>();
     const mapByItem = new Map<string, number>();
 
+    // Detect columns from first row
+    const firstRow = rows[0];
+    const keys = Object.keys(firstRow);
+
+    const findCol = (possibleNames: string[]) =>
+      keys.find(k =>
+        possibleNames.some(pn =>
+          k.toLowerCase().replace(/[\s_\-]/g, '').includes(pn.toLowerCase().replace(/[\s_\-]/g, ''))
+        )
+      );
+
+    const barcodeCol = findCol(['barcode', 'upc', 'ean', 'gtin', 'code']);
+    const itemCol    = findCol(['itemno', 'itemnum', 'itemnumber', 'itemcode', 'article', 'sku', 'item']);
+    const sohCol     = findCol(['soh', 'stockonhand', 'stock', 'onhand', 'available', 'totalqty', 'totalstock', 'balanceqty', 'qtyonhand', 'availqty', 'quantity', 'qty']);
+
     rows.forEach(row => {
-      const keys = Object.keys(row);
-      const getVal = (possibleNames: string[]) => {
-        const key = keys.find(k =>
-          possibleNames.some(pn =>
-            k.toLowerCase().replace(/[\s_]/g, '').includes(pn.toLowerCase().replace(/[\s_]/g, ''))
-          )
-        );
-        return key ? row[key] : undefined;
-      };
-
-      const rawBarcode =
-        getVal(['barcode', 'upc', 'ean', 'gtin', 'code']) ??
-        Object.values(row)[0];
-      const rawItemNo =
-        getVal(['itemno', 'itemnum', 'itemnumber', 'itemcode', 'article', 'sku', 'item']) ??
-        Object.values(row)[1];
-      const sohVal =
-        getVal(['soh', 'stockonhand', 'stock', 'onhand', 'available', 'qty', 'quantity']) ??
-        Object.values(row)[2];
-
-      const sohNum = parseFloat(String(sohVal ?? '0').trim());
+      // Resolve SOH value: try named column first, then first numeric value in row
+      let sohNum: number;
+      if (sohCol) {
+        sohNum = parseFloat(String(row[sohCol] ?? '').trim());
+      } else {
+        // Find the first numeric value in the row (skip the identifier columns)
+        const numeric = Object.values(row)
+          .map(v => parseFloat(String(v ?? '').trim()))
+          .find(n => !isNaN(n) && isFinite(n));
+        sohNum = numeric ?? NaN;
+      }
       if (isNaN(sohNum)) return;
 
-      if (rawBarcode != null) {
+      // Resolve barcode
+      const rawBarcode = barcodeCol ? row[barcodeCol] : Object.values(row)[0];
+      if (rawBarcode != null && rawBarcode !== '') {
         let barcodeStr = String(rawBarcode).trim();
         if (barcodeStr.endsWith('.0')) barcodeStr = barcodeStr.slice(0, -2);
         if (barcodeStr) {
@@ -69,7 +76,9 @@ export function useSohData() {
         }
       }
 
-      if (rawItemNo != null) {
+      // Resolve item number
+      const rawItemNo = itemCol ? row[itemCol] : (barcodeCol ? undefined : Object.values(row)[0]);
+      if (rawItemNo != null && rawItemNo !== '') {
         let itemStr = String(rawItemNo).trim();
         if (itemStr.endsWith('.0')) itemStr = itemStr.slice(0, -2);
         if (itemStr) {
