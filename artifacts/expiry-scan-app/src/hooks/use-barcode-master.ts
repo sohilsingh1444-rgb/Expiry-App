@@ -14,9 +14,7 @@ export type BarcodeMasterRow = {
   soh?: string;
 };
 
-const STORAGE_KEY = 'expiry-scan-barcode-master';
-const ITEM_INDEX_KEY = 'expiry-scan-barcode-master-by-item';
-const API_TS_KEY = 'expiry-scan-barcode-master-api-ts';
+// Barcode master is too large (~16 MB) for localStorage — always fetched from server
 
 export function buildBarcodeMaps(rows: any[]): {
   map: Record<string, BarcodeMasterRow>;
@@ -84,33 +82,20 @@ export function useBarcodeMaster() {
   useEffect(() => {
     async function init() {
       try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) setMasterData(new Map<string, BarcodeMasterRow>(Object.entries(JSON.parse(stored))));
-        const storedByItem = localStorage.getItem(ITEM_INDEX_KEY);
-        if (storedByItem) setMasterByItem(new Map<string, BarcodeMasterRow>(Object.entries(JSON.parse(storedByItem))));
-      } catch (e) {
-        console.error('Failed to load barcode master from local storage', e);
-      }
-
-      try {
         const metaRes = await fetch(`${getApiBase()}/api/barcode-master/meta`);
         if (metaRes.ok) {
           const meta: { uploadedAt: string | null; count: number } = await metaRes.json();
-          const cachedTs = localStorage.getItem(API_TS_KEY);
-          if (meta.uploadedAt && meta.uploadedAt !== cachedTs && meta.count > 0) {
+          if (meta.uploadedAt && meta.count > 0) {
             const dataRes = await fetch(`${getApiBase()}/api/barcode-master`);
             if (dataRes.ok) {
               const data: { map: Record<string, BarcodeMasterRow>; byItem: Record<string, BarcodeMasterRow> } = await dataRes.json();
               setMasterData(new Map(Object.entries(data.map)));
               setMasterByItem(new Map(Object.entries(data.byItem)));
-              try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data.map)); } catch {}
-              try { localStorage.setItem(ITEM_INDEX_KEY, JSON.stringify(data.byItem)); } catch {}
-              localStorage.setItem(API_TS_KEY, meta.uploadedAt);
             }
           }
         }
       } catch {
-        // API unavailable — use cached localStorage data
+        // API unavailable
       }
 
       setIsLoaded(true);
@@ -124,16 +109,11 @@ export function useBarcodeMaster() {
     const byItemM = new Map(Object.entries(byItem));
     setMasterData(mapM);
     setMasterByItem(byItemM);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(map)); } catch (e) { console.error(e); }
-    try { localStorage.setItem(ITEM_INDEX_KEY, JSON.stringify(byItem)); } catch (e) { console.error(e); }
   }, []);
 
   const clearMasterData = useCallback(() => {
     setMasterData(new Map());
     setMasterByItem(new Map());
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(ITEM_INDEX_KEY);
-    localStorage.removeItem(API_TS_KEY);
   }, []);
 
   const lookupBarcode = useCallback((barcode: string, region?: string, itemNumber?: string): BarcodeMasterRow | undefined => {
