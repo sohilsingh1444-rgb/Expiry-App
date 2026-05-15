@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getApiBase } from '@/lib/api-base';
 
 export type BarcodeMasterRow = {
   barcode: string;
@@ -15,6 +16,65 @@ export type BarcodeMasterRow = {
 
 const STORAGE_KEY = 'expiry-scan-barcode-master';
 const ITEM_INDEX_KEY = 'expiry-scan-barcode-master-by-item';
+const API_TS_KEY = 'expiry-scan-barcode-master-api-ts';
+
+export function buildBarcodeMaps(rows: any[]): {
+  map: Record<string, BarcodeMasterRow>;
+  byItem: Record<string, BarcodeMasterRow>;
+  count: number;
+} {
+  const map: Record<string, BarcodeMasterRow> = {};
+  const byItem: Record<string, BarcodeMasterRow> = {};
+
+  rows.forEach(row => {
+    const keys = Object.keys(row);
+
+    const getVal = (...possibleNames: string[]) => {
+      const key = keys.find(k =>
+        possibleNames.some(pn =>
+          k.toLowerCase().replace(/[\s_\-]/g, '').includes(pn.toLowerCase().replace(/[\s_\-]/g, ''))
+        )
+      );
+      return key ? String(row[key] ?? '').trim() : '';
+    };
+
+    const rawBarcode = getVal('barcode', 'upc', 'ean', 'gtin');
+    const itemNumber = getVal('itemno', 'item', 'sku', 'article', 'itemnum', 'itemnumber', 'itemcode');
+    const description = getVal('desc', 'description', 'name', 'product');
+    const soh = getVal('soh', 'stockonhand', 'stock', 'onhand');
+
+    const rrp_CRWR =
+      getVal('rrp_crwr', 'retailprice_crwr', 'price_crwr') ||
+      getVal('rrp', 'retailprice', 'retail');
+    const special_CRWR =
+      getVal('offerprice_crwr', 'offer_crwr', 'special_crwr', 'promo_crwr', 'saleprice_crwr') ||
+      getVal('special', 'specialprice', 'promo', 'sale', 'offerprice', 'offer', 'saleprice');
+    const rrp_NR = getVal('rrp_nr', 'retailprice_nr', 'price_nr');
+    const special_NR = getVal('offerprice_nr', 'offer_nr', 'special_nr', 'promo_nr', 'saleprice_nr');
+
+    const entry: BarcodeMasterRow = {
+      barcode: rawBarcode ? String(rawBarcode).trim().replace(/\.0$/, '') : '',
+      itemNumber: String(itemNumber || '').trim().replace(/\.0$/, ''),
+      description: String(description || '').trim(),
+      rrp: rrp_CRWR || undefined,
+      special: special_CRWR || undefined,
+      rrp_CRWR: rrp_CRWR || undefined,
+      special_CRWR: special_CRWR || undefined,
+      rrp_NR: rrp_NR || undefined,
+      special_NR: special_NR || undefined,
+      soh: soh || undefined,
+    };
+
+    if (entry.barcode) map[entry.barcode] = entry;
+    if (entry.itemNumber) {
+      if (!byItem[entry.itemNumber] || (entry.rrp && !byItem[entry.itemNumber].rrp)) {
+        byItem[entry.itemNumber] = entry;
+      }
+    }
+  });
+
+  return { map, byItem, count: Math.max(Object.keys(map).length, Object.keys(byItem).length) };
+}
 
 export function useBarcodeMaster() {
   const [masterData, setMasterData] = useState<Map<string, BarcodeMasterRow>>(new Map());
@@ -22,96 +82,50 @@ export function useBarcodeMaster() {
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setMasterData(new Map<string, BarcodeMasterRow>(Object.entries(JSON.parse(stored))));
+    async function init() {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) setMasterData(new Map<string, BarcodeMasterRow>(Object.entries(JSON.parse(stored))));
+        const storedByItem = localStorage.getItem(ITEM_INDEX_KEY);
+        if (storedByItem) setMasterByItem(new Map<string, BarcodeMasterRow>(Object.entries(JSON.parse(storedByItem))));
+      } catch (e) {
+        console.error('Failed to load barcode master from local storage', e);
       }
-      const storedByItem = localStorage.getItem(ITEM_INDEX_KEY);
-      if (storedByItem) {
-        setMasterByItem(new Map<string, BarcodeMasterRow>(Object.entries(JSON.parse(storedByItem))));
+
+      try {
+        const metaRes = await fetch(`${getApiBase()}/api/barcode-master/meta`);
+        if (metaRes.ok) {
+          const meta: { uploadedAt: string | null; count: number } = await metaRes.json();
+          const cachedTs = localStorage.getItem(API_TS_KEY);
+          if (meta.uploadedAt && meta.uploadedAt !== cachedTs && meta.count > 0) {
+            const dataRes = await fetch(`${getApiBase()}/api/barcode-master`);
+            if (dataRes.ok) {
+              const data: { map: Record<string, BarcodeMasterRow>; byItem: Record<string, BarcodeMasterRow> } = await dataRes.json();
+              setMasterData(new Map(Object.entries(data.map)));
+              setMasterByItem(new Map(Object.entries(data.byItem)));
+              try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data.map)); } catch {}
+              try { localStorage.setItem(ITEM_INDEX_KEY, JSON.stringify(data.byItem)); } catch {}
+              localStorage.setItem(API_TS_KEY, meta.uploadedAt);
+            }
+          }
+        }
+      } catch {
+        // API unavailable — use cached localStorage data
       }
-    } catch (e) {
-      console.error('Failed to load barcode master from local storage', e);
-    } finally {
+
       setIsLoaded(true);
     }
+    init();
   }, []);
 
   const saveMasterData = useCallback((rows: any[]) => {
-    const map = new Map<string, BarcodeMasterRow>();
-    const byItem = new Map<string, BarcodeMasterRow>();
-
-    rows.forEach(row => {
-      const keys = Object.keys(row);
-
-      const getVal = (...possibleNames: string[]) => {
-        const key = keys.find(k =>
-          possibleNames.some(pn =>
-            k.toLowerCase().replace(/[\s_\-]/g, '').includes(pn.toLowerCase().replace(/[\s_\-]/g, ''))
-          )
-        );
-        return key ? String(row[key] ?? '').trim() : '';
-      };
-
-      const rawBarcode = getVal('barcode', 'upc', 'ean', 'gtin');
-      const itemNumber = getVal('itemno', 'item', 'sku', 'article', 'itemnum', 'itemnumber', 'itemcode');
-      const description = getVal('desc', 'description', 'name', 'product');
-      const soh = getVal('soh', 'stockonhand', 'stock', 'onhand');
-
-      const rrp_CRWR =
-        getVal('rrp_crwr', 'retailprice_crwr', 'price_crwr') ||
-        getVal('rrp', 'retailprice', 'retail');
-      const special_CRWR =
-        getVal('offerprice_crwr', 'offer_crwr', 'special_crwr', 'promo_crwr', 'saleprice_crwr') ||
-        getVal('special', 'specialprice', 'promo', 'sale', 'offerprice', 'offer', 'saleprice');
-      const rrp_NR =
-        getVal('rrp_nr', 'retailprice_nr', 'price_nr') ||
-        (!rawBarcode && !getVal('rrp_crwr', 'retailprice_crwr', 'price_crwr') ? '' : '');
-      const special_NR =
-        getVal('offerprice_nr', 'offer_nr', 'special_nr', 'promo_nr', 'saleprice_nr');
-
-      const entry: BarcodeMasterRow = {
-        barcode: rawBarcode ? String(rawBarcode).trim().replace(/\.0$/, '') : '',
-        itemNumber: String(itemNumber || '').trim().replace(/\.0$/, ''),
-        description: String(description || '').trim(),
-        rrp: rrp_CRWR || undefined,
-        special: special_CRWR || undefined,
-        rrp_CRWR: rrp_CRWR || undefined,
-        special_CRWR: special_CRWR || undefined,
-        rrp_NR: rrp_NR || undefined,
-        special_NR: special_NR || undefined,
-        soh: soh || undefined,
-      };
-
-      // Index by barcode if present
-      if (entry.barcode) {
-        map.set(entry.barcode, entry);
-      }
-
-      // Always index by item number if present — this is the primary key for
-      // promo/pricing files that have no barcode column
-      if (entry.itemNumber) {
-        // Keep entry with highest/latest RRP if item appears multiple times
-        const existing = byItem.get(entry.itemNumber);
-        if (!existing || (entry.rrp && !existing.rrp)) {
-          byItem.set(entry.itemNumber, entry);
-        }
-      }
-    });
-
-    setMasterData(map);
-    setMasterByItem(byItem);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(map)));
-    } catch (e) {
-      console.error('Failed to save barcode master to local storage', e);
-    }
-    try {
-      localStorage.setItem(ITEM_INDEX_KEY, JSON.stringify(Object.fromEntries(byItem)));
-    } catch (e) {
-      console.error('Failed to save barcode master item index to local storage', e);
-    }
+    const { map, byItem } = buildBarcodeMaps(rows);
+    const mapM = new Map(Object.entries(map));
+    const byItemM = new Map(Object.entries(byItem));
+    setMasterData(mapM);
+    setMasterByItem(byItemM);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(map)); } catch (e) { console.error(e); }
+    try { localStorage.setItem(ITEM_INDEX_KEY, JSON.stringify(byItem)); } catch (e) { console.error(e); }
   }, []);
 
   const clearMasterData = useCallback(() => {
@@ -119,6 +133,7 @@ export function useBarcodeMaster() {
     setMasterByItem(new Map());
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(ITEM_INDEX_KEY);
+    localStorage.removeItem(API_TS_KEY);
   }, []);
 
   const lookupBarcode = useCallback((barcode: string, region?: string, itemNumber?: string): BarcodeMasterRow | undefined => {
@@ -127,7 +142,6 @@ export function useBarcodeMaster() {
 
     let row = masterData.get(normalized);
 
-    // Fallback: try item number index if barcode not found
     if (!row && itemNumber) {
       let ni = String(itemNumber).trim();
       if (ni.endsWith('.0')) ni = ni.slice(0, -2);
