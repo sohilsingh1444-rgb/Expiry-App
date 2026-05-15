@@ -794,7 +794,7 @@ export default function Home() {
                   />
                   
                   {/* Matched item info panel */}
-                  {matchedItem && (matchedItem.rrp || matchedItem.special || matchedItem.soh || lookupSoh(watchBarcode) != null) && (
+                  {matchedItem && (matchedItem.rrp || matchedItem.special || matchedItem.soh || sohData.size > 0) && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-1.5 text-sm">
                       <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Item Data</div>
                       <div className="grid grid-cols-2 gap-2 text-center">
@@ -816,10 +816,13 @@ export default function Home() {
                             <div className="font-bold text-blue-700">{matchedItem.soh}</div>
                           </div>
                         )}
-                        {lookupSoh(watchBarcode) != null && (
-                          <div className="bg-white rounded-md border border-purple-100 px-2 py-1.5">
+                        {sohData.size > 0 && (
+                          <div className={`bg-white rounded-md border px-2 py-1.5 ${lookupSoh(watchBarcode) != null ? 'border-purple-100' : 'border-zinc-100'}`}>
                             <div className="text-xs text-zinc-500">System SOH</div>
-                            <div className="font-bold text-purple-700">{lookupSoh(watchBarcode)}</div>
+                            {lookupSoh(watchBarcode) != null
+                              ? <div className="font-bold text-purple-700">{lookupSoh(watchBarcode)}</div>
+                              : <div className="font-bold text-zinc-400">—</div>
+                            }
                           </div>
                         )}
                       </div>
