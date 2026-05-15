@@ -106,7 +106,7 @@ export async function parseBarcodeMaster(file: File): Promise<any[]> {
 
   const colNames: string[] = headerRow.map((h, c) => {
     if (!h) return `__col${c}`;
-    return colRegions[c] ? `${h}_${colRegions[c]}` : h;
+    return colRegions[c] ? `${h}_${colRegions[c].toLowerCase()}` : h;
   });
 
   const result: any[] = [];
