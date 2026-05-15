@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
-import { gunzipSync } from "zlib";
+import { gunzipSync, gzipSync } from "zlib";
 import { db, appSettingsTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -40,12 +40,17 @@ router.get("/barcode-master", async (_req, res): Promise<void> => {
   const byItemJson = await getSetting("bm_by_item_json");
   const uploadedAt = await getSetting("bm_uploaded_at");
   const count = await getSetting("bm_count");
-  res.json({
+  const payload = JSON.stringify({
     map: mapJson ? JSON.parse(mapJson) : {},
     byItem: byItemJson ? JSON.parse(byItemJson) : {},
     uploadedAt: uploadedAt ?? null,
     count: count ? Number(count) : 0,
   });
+  const compressed = gzipSync(Buffer.from(payload));
+  res.setHeader("Content-Encoding", "gzip");
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Vary", "Accept-Encoding");
+  res.send(compressed);
 });
 
 router.post("/admin/barcode-master", async (req, res): Promise<void> => {
