@@ -191,6 +191,7 @@ export default function Home() {
   });
 
   const watchBarcode = scanForm.watch("barcode");
+  const watchItemNumber = scanForm.watch("itemNumber");
   const watchExpiryDate = scanForm.watch("expiryDate");
 
 
@@ -407,7 +408,7 @@ export default function Home() {
         remarks: values.remarks,
         ...(matchedItem?.rrp ? { rrp: parseFloat(String(matchedItem.rrp)) } : {}),
         ...(matchedItem?.special ? { specialPrice: parseFloat(String(matchedItem.special)) } : {}),
-        ...(lookupSoh(barcodeStr) != null ? { systemSoh: lookupSoh(barcodeStr)! } : {}),
+        ...(lookupSoh(barcodeStr, values.itemNumber) != null ? { systemSoh: lookupSoh(barcodeStr, values.itemNumber)! } : {}),
         wrongRrp: values.wrongRrp,
         missingSpecialTicket: values.missingSpecialTicket,
         notOnDisplay: values.notOnDisplay,
@@ -817,10 +818,10 @@ export default function Home() {
                           </div>
                         )}
                         {sohData.size > 0 && (
-                          <div className={`bg-white rounded-md border px-2 py-1.5 ${lookupSoh(watchBarcode) != null ? 'border-purple-100' : 'border-zinc-100'}`}>
+                          <div className={`bg-white rounded-md border px-2 py-1.5 ${lookupSoh(watchBarcode, watchItemNumber) != null ? 'border-purple-100' : 'border-zinc-100'}`}>
                             <div className="text-xs text-zinc-500">System SOH</div>
-                            {lookupSoh(watchBarcode) != null
-                              ? <div className="font-bold text-purple-700">{lookupSoh(watchBarcode)}</div>
+                            {lookupSoh(watchBarcode, watchItemNumber) != null
+                              ? <div className="font-bold text-purple-700">{lookupSoh(watchBarcode, watchItemNumber)}</div>
                               : <div className="font-bold text-zinc-400">—</div>
                             }
                           </div>
