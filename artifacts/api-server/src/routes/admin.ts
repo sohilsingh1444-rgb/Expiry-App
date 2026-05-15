@@ -72,6 +72,16 @@ router.post("/admin/verify", (req, res): void => {
   res.json({ ok: true });
 });
 
+router.post("/admin/it-verify", (req, res): void => {
+  const itPassword = process.env.IT_PASSWORD;
+  const { password } = req.body as { password?: string };
+  if (!itPassword || password !== itPassword) {
+    res.status(401).json({ error: "Invalid password" });
+    return;
+  }
+  res.json({ ok: true });
+});
+
 router.get("/admin/settings", async (_req, res): Promise<void> => {
   const urgentDays = await getSetting("urgent_days", String(DEFAULT_URGENT_DAYS));
   const nearExpiryDays = await getSetting("near_expiry_days", String(DEFAULT_NEAR_EXPIRY_DAYS));
