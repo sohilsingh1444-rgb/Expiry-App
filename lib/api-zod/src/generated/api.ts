@@ -36,7 +36,7 @@ export const ListExpiryScansParams = zod.object({
 });
 
 export const ListExpiryScansResponseItem = zod.object({
-  id: zod.number(),
+  id: zod.coerce.number(),
   sessionId: zod.string(),
   pdUserName: zod.string(),
   storeLocation: zod.string(),
