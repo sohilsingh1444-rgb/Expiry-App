@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 const SOH_STORAGE_KEY = 'expiry-scan-soh-data';
 
@@ -23,7 +23,7 @@ export function useSohData() {
     }
   }, []);
 
-  const saveSohData = (rows: any[]) => {
+  const saveSohData = useCallback((rows: any[]) => {
     const map = new Map<string, number>();
     rows.forEach(row => {
       const keys = Object.keys(row);
@@ -59,18 +59,18 @@ export function useSohData() {
     } catch (e) {
       console.error('Failed to save SOH data to local storage', e);
     }
-  };
+  }, []);
 
-  const clearSohData = () => {
+  const clearSohData = useCallback(() => {
     setSohData(new Map());
     localStorage.removeItem(SOH_STORAGE_KEY);
-  };
+  }, []);
 
-  const lookupSoh = (barcode: string): number | undefined => {
+  const lookupSoh = useCallback((barcode: string): number | undefined => {
     let normalized = String(barcode).trim();
     if (normalized.endsWith('.0')) normalized = normalized.slice(0, -2);
     return sohData.get(normalized);
-  };
+  }, [sohData]);
 
   return { sohData, isLoaded, saveSohData, clearSohData, lookupSoh };
 }
