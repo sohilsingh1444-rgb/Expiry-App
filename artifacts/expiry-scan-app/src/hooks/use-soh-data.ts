@@ -48,7 +48,8 @@ export function useSohData() {
     const barcodeCol = findCol(['barcode', 'upc', 'ean', 'gtin', 'code']);
     const itemCol    = findCol(['itemno', 'itemnum', 'itemnumber', 'itemcode', 'article', 'sku', 'item']);
     const sohCol     = findCol(['soh', 'stockonhand', 'stock', 'onhand', 'available', 'totalqty',
-                                'totalstock', 'balanceqty', 'qtyonhand', 'availqty', 'quantity', 'qty']);
+                                'totalstock', 'balanceqty', 'qtyonhand', 'availqty', 'quantity', 'qty',
+                                'inventory', 'inv', 'inven', 'onhandqty', 'physicalinv']);
 
     // Identifier columns — exclude ALL of these when searching for a numeric SOH fallback
     const identifierCols = new Set<string>([
