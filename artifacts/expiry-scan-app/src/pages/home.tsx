@@ -235,6 +235,10 @@ export default function Home() {
       }
     } else {
       setMatchedItem(null);
+      if (!watchBarcode) {
+        scanForm.setValue("itemNumber", "");
+        scanForm.setValue("description", "");
+      }
     }
   }, [watchBarcode, lookupBarcode, scanForm]);
 
