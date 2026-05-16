@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
-import { NotFoundException } from "@zxing/library";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Camera } from "lucide-react";
@@ -64,7 +63,7 @@ export function CameraScanner({ open, onClose, onDetected }: CameraScannerProps)
               stoppedRef.current = true;
               BrowserMultiFormatReader.releaseAllStreams();
               handleDetected(result.getText());
-            } else if (err && !(err instanceof NotFoundException)) {
+            } else if (err && (err as Error).name !== "NotFoundException") {
               // NotFoundException is normal — no barcode in frame yet
             }
           },
