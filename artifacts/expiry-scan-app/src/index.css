@@ -253,3 +253,9 @@
     inset: -1px;
   }
 }
+
+@keyframes scanline {
+  0%   { top: 4px; }
+  50%  { top: calc(100% - 4px); }
+  100% { top: 4px; }
+}

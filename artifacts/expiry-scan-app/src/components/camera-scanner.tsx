@@ -64,7 +64,6 @@ export function CameraScanner({ open, onClose, onDetected }: CameraScannerProps)
     let cancelled = false;
 
     async function startNative() {
-      // Use native BarcodeDetector (Chrome 83+, Android Chrome — ideal for retail)
       try {
         // @ts-ignore — BarcodeDetector is not in TS lib yet
         const detector = new BarcodeDetector({ formats: RETAIL_FORMATS });
@@ -125,7 +124,6 @@ export function CameraScanner({ open, onClose, onDetected }: CameraScannerProps)
         setScanning(true);
 
         const reader = new BrowserMultiFormatReader();
-        // decodeFromStream feeds the already-running video element
         const controls = await reader.decodeFromStream(stream, video, (result, err, controls) => {
           if (cancelled) { controls?.stop(); return; }
           if (result) {
@@ -189,17 +187,46 @@ export function CameraScanner({ open, onClose, onDetected }: CameraScannerProps)
                 playsInline
               />
               <canvas ref={canvasRef} className="hidden" />
+
               {scanning && (
                 <>
-                  <div className="absolute inset-0 border-[3px] border-amber-400 rounded-xl pointer-events-none" />
-                  <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <div className="h-0.5 bg-amber-400 opacity-90 animate-pulse" />
+                  {/* Dark overlay: top */}
+                  <div className="absolute inset-x-0 top-0 bg-black/55 pointer-events-none" style={{ bottom: '25%' }} />
+                  {/* Dark overlay: bottom */}
+                  <div className="absolute inset-x-0 bottom-0 bg-black/55 pointer-events-none" style={{ top: '75%' }} />
+                  {/* Dark overlay: left strip (middle band) */}
+                  <div className="absolute bg-black/55 pointer-events-none" style={{ top: '25%', bottom: '25%', left: 0, right: '80%' }} />
+                  {/* Dark overlay: right strip (middle band) */}
+                  <div className="absolute bg-black/55 pointer-events-none" style={{ top: '25%', bottom: '25%', left: '80%', right: 0 }} />
+
+                  {/* Viewfinder box border */}
+                  <div
+                    className="absolute pointer-events-none"
+                    style={{ top: '25%', bottom: '25%', left: '10%', right: '10%' }}
+                  >
+                    {/* Corner brackets */}
+                    {/* Top-left */}
+                    <span className="absolute top-0 left-0 w-6 h-6 border-t-[3px] border-l-[3px] border-amber-400 rounded-tl-sm" />
+                    {/* Top-right */}
+                    <span className="absolute top-0 right-0 w-6 h-6 border-t-[3px] border-r-[3px] border-amber-400 rounded-tr-sm" />
+                    {/* Bottom-left */}
+                    <span className="absolute bottom-0 left-0 w-6 h-6 border-b-[3px] border-l-[3px] border-amber-400 rounded-bl-sm" />
+                    {/* Bottom-right */}
+                    <span className="absolute bottom-0 right-0 w-6 h-6 border-b-[3px] border-r-[3px] border-amber-400 rounded-br-sm" />
+
+                    {/* Animated scan line inside the box */}
+                    <div className="absolute inset-x-2 h-0.5 bg-amber-400/90 shadow-[0_0_6px_2px_rgba(251,191,36,0.6)]"
+                      style={{ animation: 'scanline 1.8s ease-in-out infinite' }}
+                    />
                   </div>
-                  <div className="absolute bottom-2 left-0 right-0 text-center text-xs text-amber-300 font-medium pointer-events-none">
-                    Point at barcode to scan
+
+                  {/* Instruction label */}
+                  <div className="absolute bottom-2 left-0 right-0 text-center text-xs text-amber-300 font-medium pointer-events-none tracking-wide">
+                    Align barcode inside the box
                   </div>
                 </>
               )}
+
               {!scanning && !error && (
                 <div className="absolute inset-0 flex items-center justify-center text-white text-sm">
                   Starting camera…
