@@ -1,10 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getApiBase } from '@/lib/api-base';
 
-const SOH_STORAGE_KEY = 'expiry-scan-soh-data';
-const SOH_ITEM_STORAGE_KEY = 'expiry-scan-soh-data-by-item';
-const SOH_API_TS_KEY = 'expiry-scan-soh-api-ts';
-
 export function buildSohMaps(rows: any[]): {
   byBarcode: Record<string, number>;
   byItem: Record<string, number>;
@@ -80,41 +76,20 @@ export function useSohData() {
   useEffect(() => {
     async function init() {
       try {
-        const stored = localStorage.getItem(SOH_STORAGE_KEY);
-        if (stored) {
-          setSohData(new Map<string, number>(
-            Object.entries(JSON.parse(stored)).map(([k, v]) => [k, Number(v)])
-          ));
-        }
-        const storedByItem = localStorage.getItem(SOH_ITEM_STORAGE_KEY);
-        if (storedByItem) {
-          setSohByItem(new Map<string, number>(
-            Object.entries(JSON.parse(storedByItem)).map(([k, v]) => [k, Number(v)])
-          ));
-        }
-      } catch (e) {
-        console.error('Failed to load SOH data from local storage', e);
-      }
-
-      try {
         const metaRes = await fetch(`${getApiBase()}/api/soh-data/meta`);
         if (metaRes.ok) {
           const meta: { uploadedAt: string | null; count: number } = await metaRes.json();
-          const cachedTs = localStorage.getItem(SOH_API_TS_KEY);
-          if (meta.uploadedAt && meta.uploadedAt !== cachedTs && meta.count > 0) {
+          if (meta.uploadedAt && meta.count > 0) {
             const dataRes = await fetch(`${getApiBase()}/api/soh-data`);
             if (dataRes.ok) {
               const data: { byBarcode: Record<string, number>; byItem: Record<string, number> } = await dataRes.json();
               setSohData(new Map(Object.entries(data.byBarcode).map(([k, v]) => [k, Number(v)])));
               setSohByItem(new Map(Object.entries(data.byItem).map(([k, v]) => [k, Number(v)])));
-              try { localStorage.setItem(SOH_STORAGE_KEY, JSON.stringify(data.byBarcode)); } catch {}
-              try { localStorage.setItem(SOH_ITEM_STORAGE_KEY, JSON.stringify(data.byItem)); } catch {}
-              localStorage.setItem(SOH_API_TS_KEY, meta.uploadedAt);
             }
           }
         }
       } catch {
-        // API unavailable — use cached localStorage data
+        // API unavailable
       }
 
       setIsLoaded(true);
@@ -126,16 +101,11 @@ export function useSohData() {
     const { byBarcode, byItem } = buildSohMaps(rows);
     setSohData(new Map(Object.entries(byBarcode).map(([k, v]) => [k, Number(v)])));
     setSohByItem(new Map(Object.entries(byItem).map(([k, v]) => [k, Number(v)])));
-    try { localStorage.setItem(SOH_STORAGE_KEY, JSON.stringify(byBarcode)); } catch (e) { console.error(e); }
-    try { localStorage.setItem(SOH_ITEM_STORAGE_KEY, JSON.stringify(byItem)); } catch (e) { console.error(e); }
   }, []);
 
   const clearSohData = useCallback(() => {
     setSohData(new Map());
     setSohByItem(new Map());
-    localStorage.removeItem(SOH_STORAGE_KEY);
-    localStorage.removeItem(SOH_ITEM_STORAGE_KEY);
-    localStorage.removeItem(SOH_API_TS_KEY);
   }, []);
 
   const lookupSoh = useCallback((barcode: string, itemNumber?: string): number | undefined => {
