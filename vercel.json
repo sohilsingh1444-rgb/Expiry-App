@@ -11,5 +11,11 @@
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api" },
     { "source": "/:path*", "destination": "/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/email/weekly-report",
+      "schedule": "0 20 * * 0"
+    }
   ]
 }

@@ -41,7 +41,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { AlertCircle, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight, Database, ChevronsUpDown, Check } from "lucide-react";
+import { AlertCircle, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight, Database, ChevronsUpDown, Check, Camera } from "lucide-react";
+import { CameraScanner } from "@/components/camera-scanner";
 import { parseBarcodeMaster, parseSohFile, exportToExcel } from "@/lib/xlsx";
 import { useBarcodeMaster } from "@/hooks/use-barcode-master";
 import { useSohData } from "@/hooks/use-soh-data";
@@ -160,6 +161,7 @@ export default function Home() {
   const [matchedItem, setMatchedItem] = useState<BarcodeMasterRow | null>(null);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [storeComboOpen, setStoreComboOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const { masterData, isLoaded, saveMasterData, clearMasterData, lookupBarcode } = useBarcodeMaster();
@@ -784,19 +786,31 @@ export default function Home() {
                       <FormItem>
                         <FormLabel className="font-bold text-zinc-800">Barcode / UPC</FormLabel>
                         <FormControl>
-                          <Input 
-                            {...field} 
-                            placeholder="Scan or type..." 
-                            className="h-12 text-lg font-mono bg-zinc-50 border-zinc-300 focus-visible:ring-amber-500"
-                            autoFocus
-                            ref={(e) => {
-                              field.ref(e);
-                              if (e) {
-                                // @ts-ignore
-                                barcodeInputRef.current = e;
-                              }
-                            }}
-                          />
+                          <div className="flex gap-2">
+                            <Input 
+                              {...field} 
+                              placeholder="Scan or type..." 
+                              className="h-12 text-lg font-mono bg-zinc-50 border-zinc-300 focus-visible:ring-amber-500"
+                              autoFocus
+                              ref={(e) => {
+                                field.ref(e);
+                                if (e) {
+                                  // @ts-ignore
+                                  barcodeInputRef.current = e;
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-12 w-12 shrink-0 border-zinc-300 hover:bg-amber-50 hover:border-amber-400"
+                              onClick={() => setCameraOpen(true)}
+                              title="Scan with camera"
+                            >
+                              <Camera className="w-5 h-5 text-zinc-600" />
+                            </Button>
+                          </div>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1194,6 +1208,15 @@ export default function Home() {
           </Card>
         </div>
       </main>
+
+      <CameraScanner
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onDetected={(barcode) => {
+          scanForm.setValue("barcode", barcode, { shouldValidate: true });
+          setTimeout(() => barcodeInputRef.current?.focus(), 100);
+        }}
+      />
     </div>
   );
 }
