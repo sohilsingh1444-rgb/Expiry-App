@@ -1,7 +1,8 @@
 {
+  "framework": null,
+  "installCommand": "npm install --ignore-scripts",
   "buildCommand": "echo 'using pre-built dist'",
   "outputDirectory": "artifacts/expiry-scan-app/dist/public",
-  "installCommand": "echo 'no install needed'",
   "functions": {
     "api/index.js": {
       "includeFiles": "artifacts/api-server/dist/vercel.cjs",
