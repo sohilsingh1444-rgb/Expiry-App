@@ -68,6 +68,21 @@ async function buildAll() {
     logLevel: "info",
     define: { "process.env.NODE_ENV": '"production"' },
     external: vercelExternal,
+    plugins: [
+      {
+        name: "stub-pg-native",
+        setup(build) {
+          build.onResolve({ filter: /^pg-native$/ }, () => ({
+            path: "pg-native",
+            namespace: "pg-native-stub",
+          }));
+          build.onLoad({ filter: /.*/, namespace: "pg-native-stub" }, () => ({
+            contents: "module.exports = null;",
+            loader: "js",
+          }));
+        },
+      },
+    ],
   });
 }
 
