@@ -1,11 +1,21 @@
 import { Router, type IRouter } from "express";
 import nodemailer from "nodemailer";
 import ExcelJS from "exceljs";
-import { eq, gte } from "drizzle-orm";
+import { eq, gte, lt } from "drizzle-orm";
 import { db, storesTable, expiryScansTable } from "@workspace/db";
 import { ensureStoresSeeded } from "./admin";
 
 const router: IRouter = Router();
+
+async function pruneOldScans(retentionDays: number): Promise<number> {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - retentionDays);
+  const cutoffStr = cutoff.toISOString().split("T")[0]!;
+  const result = await db
+    .delete(expiryScansTable)
+    .where(lt(expiryScansTable.scanDate, cutoffStr));
+  return (result as any).rowCount ?? 0;
+}
 
 function createTransporter(pool = false) {
   const smtpUser = process.env.SMTP_USER ?? process.env.GMAIL_USER;
@@ -582,7 +592,10 @@ router.get("/email/weekly-report", async (req, res): Promise<void> => {
     attachments: [{ filename, content: excelBuffer, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }],
   });
 
-  res.json({ ok: true, sentTo: managementEmail, stores: [...scansByStore.keys()], filename });
+  // Cleanup old scans after email is safely sent
+  const deleted = await pruneOldScans(90);
+
+  res.json({ ok: true, sentTo: managementEmail, stores: [...scansByStore.keys()], filename, prunedRows: deleted });
 });
 
 router.get("/email/test-report", async (req, res): Promise<void> => {
@@ -765,6 +778,22 @@ router.get("/email/test-report", async (req, res): Promise<void> => {
   });
 
   res.json({ ok: true, sentTo: toEmail, stores: rows.map(r => r.code), filename });
+});
+
+// Manual cleanup endpoint — admin only
+router.post("/admin/cleanup-scans", async (req, res): Promise<void> => {
+  const adminPw = req.headers["x-admin-password"];
+  if (adminPw !== process.env.ADMIN_PASSWORD) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const retentionDays = Number(req.query.days ?? 90);
+  if (isNaN(retentionDays) || retentionDays < 7) {
+    res.status(400).json({ error: "?days must be a number >= 7" });
+    return;
+  }
+  const deleted = await pruneOldScans(retentionDays);
+  res.json({ ok: true, deletedRows: deleted, retentionDays, message: `Deleted ${deleted} scan rows older than ${retentionDays} days.` });
 });
 
 export default router;
