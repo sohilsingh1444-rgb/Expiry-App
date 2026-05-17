@@ -148,11 +148,11 @@ export default function ItUploadPage() {
         toast({ title: "Empty file", description: "No rows found in the file.", variant: "destructive" });
         return;
       }
-      const { byBarcode, byItem, count } = buildSohMaps(rows);
+      const { byBarcode, byItem, byStore, count } = buildSohMaps(rows);
       const res = await fetch(apiUrl("/admin/soh-data"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": pw },
-        body: JSON.stringify({ byBarcode, byItem, count }),
+        body: JSON.stringify({ byBarcode, byItem, byStore, count }),
       });
       if (res.ok) {
         const data = await res.json();
