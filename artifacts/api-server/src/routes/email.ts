@@ -234,17 +234,25 @@ router.get("/email/weekly-report", async (req, res): Promise<void> => {
   }
 
   const daysBack = Math.min(365, Math.max(1, parseInt(String(req.query.days ?? "7"), 10) || 7));
+  const storeFilter = req.query.store ? String(req.query.store).toUpperCase() : null;
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - daysBack);
   const sevenDaysAgoStr = sevenDaysAgo.toISOString().split("T")[0]!;
 
-  const scans = await db
+  const allScans = await db
     .select()
     .from(expiryScansTable)
     .where(gte(expiryScansTable.scanDate, sevenDaysAgoStr));
 
+  const scans = storeFilter
+    ? allScans.filter((s) => s.storeLocation.toUpperCase() === storeFilter)
+    : allScans;
+
   if (!scans.length) {
-    res.json({ ok: true, message: "No scans in the past 7 days. No emails sent." });
+    const msg = storeFilter
+      ? `No scans found for store ${storeFilter} in the past ${daysBack} days. No email sent.`
+      : `No scans in the past ${daysBack} days. No emails sent.`;
+    res.json({ ok: true, message: msg });
     return;
   }
 
