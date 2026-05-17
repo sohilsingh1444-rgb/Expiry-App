@@ -328,4 +328,61 @@ router.get("/email/weekly-report", async (req, res): Promise<void> => {
   res.json({ ok: true, results });
 });
 
+router.get("/email/test-report", async (req, res): Promise<void> => {
+  const adminPw = req.headers["x-admin-password"];
+  if (adminPw !== process.env.ADMIN_PASSWORD) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const toEmail = String(req.query.to ?? "");
+  if (!toEmail || !toEmail.includes("@")) {
+    res.status(400).json({ error: "?to=email is required" });
+    return;
+  }
+
+  const transporter = createTransporter();
+  const smtpUser = process.env.SMTP_USER ?? process.env.GMAIL_USER;
+  if (!transporter || !smtpUser) {
+    res.status(503).json({ error: "Email credentials not configured on server." });
+    return;
+  }
+
+  const today = new Date();
+  const weekStart = new Date(today); weekStart.setDate(today.getDate() - 7);
+  const weekStartStr = weekStart.toISOString().split("T")[0]!;
+  const weekEndStr = today.toISOString().split("T")[0]!;
+
+  const html = weeklyReportHtml({
+    storeCode: "CRWR",
+    storeName: "Centerpoint (New World)",
+    weekStart: weekStartStr,
+    weekEnd: weekEndStr,
+    total: 84,
+    totalQty: 312,
+    expired: 5,
+    urgent: 11,
+    nearExpiry: 18,
+    ok: 50,
+    complianceFlags: 7,
+    topItems: [
+      { description: "Anchor Full Cream Milk 2L", barcode: "9300633102015", status: "Expired", qty: 3, expiryDate: weekStartStr },
+      { description: "Meadow Fresh Yoghurt 500g", barcode: "9415176001234", status: "Expired", qty: 2, expiryDate: weekStartStr },
+      { description: "Mainland Cheddar Slices 500g", barcode: "9310055012345", status: "Urgent", qty: 5, expiryDate: weekEndStr },
+      { description: "Sanitarium Weet-Bix 750g", barcode: "9300652830017", status: "Urgent", qty: 4, expiryDate: weekEndStr },
+      { description: "Tip Top Bread White 700g", barcode: "9415176005432", status: "Urgent", qty: 6, expiryDate: weekEndStr },
+      { description: "Pams Butter 500g", barcode: "9415176009876", status: "Urgent", qty: 2, expiryDate: weekEndStr },
+    ],
+  });
+
+  await transporter.sendMail({
+    from: `"Expiry Tracker" <${smtpUser}>`,
+    to: toEmail,
+    subject: `[TEST] Weekly Expiry Report — CRWR — ${weekStartStr} to ${weekEndStr}`,
+    html,
+  });
+
+  res.json({ ok: true, sentTo: toEmail });
+});
+
 export default router;
