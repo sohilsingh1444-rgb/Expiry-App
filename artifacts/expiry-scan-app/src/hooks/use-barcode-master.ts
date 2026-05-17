@@ -41,14 +41,28 @@ export function buildBarcodeMaps(rows: any[]): {
     const description = getVal('desc', 'description', 'name', 'product');
     const soh = getVal('soh', 'stockonhand', 'stock', 'onhand');
 
+    // Match any column whose stripped name both contains a region suffix AND a field keyword.
+    // This handles variants like rrp_nr, rrp2_nr, nr_rrp2, special3_nr, etc.
+    const findRegionCol = (region: string, ...fieldParts: string[]): string => {
+      const r = region.replace(/[\s_\-]/g, '').toLowerCase();
+      const key = keys.find(k => {
+        const kl = k.toLowerCase().replace(/[\s_\-]/g, '');
+        return (kl.endsWith(r) || kl.startsWith(r)) &&
+          fieldParts.some(p => kl.includes(p.toLowerCase().replace(/[\s_\-]/g, '')));
+      });
+      return key ? String(row[key] ?? '').trim() : '';
+    };
+
     const rrp_CRWR =
-      getVal('rrp_crwr', 'retailprice_crwr', 'price_crwr') ||
+      findRegionCol('crwr', 'rrp', 'retail', 'price') ||
       getVal('rrp', 'retailprice', 'retail');
     const special_CRWR =
-      getVal('offerprice_crwr', 'offer_crwr', 'special_crwr', 'promo_crwr', 'saleprice_crwr') ||
+      findRegionCol('crwr', 'special', 'offer', 'promo', 'sale') ||
       getVal('special', 'specialprice', 'promo', 'sale', 'offerprice', 'offer', 'saleprice');
-    const rrp_NR = getVal('rrp_nr', 'retailprice_nr', 'price_nr');
-    const special_NR = getVal('offerprice_nr', 'offer_nr', 'special_nr', 'promo_nr', 'saleprice_nr');
+    const rrp_NR =
+      findRegionCol('nr', 'rrp', 'retail', 'price');
+    const special_NR =
+      findRegionCol('nr', 'special', 'offer', 'promo', 'sale');
 
     const entry: BarcodeMasterRow = {
       barcode: rawBarcode ? String(rawBarcode).trim().replace(/\.0$/, '') : '',
