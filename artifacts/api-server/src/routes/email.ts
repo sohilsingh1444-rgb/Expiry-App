@@ -233,8 +233,9 @@ router.get("/email/weekly-report", async (req, res): Promise<void> => {
     return;
   }
 
+  const daysBack = Math.min(365, Math.max(1, parseInt(String(req.query.days ?? "7"), 10) || 7));
   const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - daysBack);
   const sevenDaysAgoStr = sevenDaysAgo.toISOString().split("T")[0]!;
 
   const scans = await db
