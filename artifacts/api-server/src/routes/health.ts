@@ -5,7 +5,7 @@ const router: IRouter = Router();
 
 router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json(data);
+  res.json({ ...data, v: "excel-v2" });
 });
 
 export default router;
