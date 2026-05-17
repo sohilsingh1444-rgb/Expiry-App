@@ -103512,39 +103512,53 @@ router4.get("/email/test-report", async (req, res) => {
     res.status(503).json({ error: "Email credentials not configured on server." });
     return;
   }
+  await ensureStoresSeeded();
+  const allStores = await db.select().from(storesTable);
   const today = /* @__PURE__ */ new Date();
   const weekStart = new Date(today);
   weekStart.setDate(today.getDate() - 7);
   const weekStartStr = weekStart.toISOString().split("T")[0];
   const weekEndStr = today.toISOString().split("T")[0];
-  const html = weeklyReportHtml({
-    storeCode: "CRWR",
-    storeName: "Centerpoint (New World)",
-    weekStart: weekStartStr,
-    weekEnd: weekEndStr,
-    total: 84,
-    totalQty: 312,
-    expired: 5,
-    urgent: 11,
-    nearExpiry: 18,
-    ok: 50,
-    complianceFlags: 7,
-    topItems: [
-      { description: "Anchor Full Cream Milk 2L", barcode: "9300633102015", status: "Expired", qty: 3, expiryDate: weekStartStr },
-      { description: "Meadow Fresh Yoghurt 500g", barcode: "9415176001234", status: "Expired", qty: 2, expiryDate: weekStartStr },
-      { description: "Mainland Cheddar Slices 500g", barcode: "9310055012345", status: "Urgent", qty: 5, expiryDate: weekEndStr },
-      { description: "Sanitarium Weet-Bix 750g", barcode: "9300652830017", status: "Urgent", qty: 4, expiryDate: weekEndStr },
-      { description: "Tip Top Bread White 700g", barcode: "9415176005432", status: "Urgent", qty: 6, expiryDate: weekEndStr },
-      { description: "Pams Butter 500g", barcode: "9415176009876", status: "Urgent", qty: 2, expiryDate: weekEndStr }
-    ]
-  });
-  await transporter.sendMail({
-    from: `"Expiry Tracker" <${smtpUser}>`,
-    to: toEmail,
-    subject: `[TEST] Weekly Expiry Report \u2014 CRWR \u2014 ${weekStartStr} to ${weekEndStr}`,
-    html
-  });
-  res.json({ ok: true, sentTo: toEmail });
+  const sampleItems = (storeCode) => [
+    { description: "Anchor Full Cream Milk 2L", barcode: "9300633102015", status: "Expired", qty: Math.ceil(Math.random() * 4 + 1), expiryDate: weekStartStr },
+    { description: "Meadow Fresh Yoghurt 500g", barcode: "9415176001234", status: "Expired", qty: Math.ceil(Math.random() * 3 + 1), expiryDate: weekStartStr },
+    { description: "Mainland Cheddar Slices 500g", barcode: "9310055012345", status: "Urgent", qty: Math.ceil(Math.random() * 6 + 2), expiryDate: weekEndStr },
+    { description: "Sanitarium Weet-Bix 750g", barcode: "9300652830017", status: "Urgent", qty: Math.ceil(Math.random() * 4 + 1), expiryDate: weekEndStr },
+    { description: "Tip Top Bread White 700g", barcode: "9415176005432", status: "Near Expiry", qty: Math.ceil(Math.random() * 5 + 1), expiryDate: weekEndStr },
+    { description: "Pams Butter 500g", barcode: "9415176009876", status: "Near Expiry", qty: Math.ceil(Math.random() * 3 + 1), expiryDate: weekEndStr }
+  ].filter((i) => i.status === "Expired" || i.status === "Urgent");
+  const sent = [];
+  for (const store of allStores) {
+    const expired = 2 + Math.floor(Math.random() * 6);
+    const urgent = 3 + Math.floor(Math.random() * 10);
+    const nearExpiry = 5 + Math.floor(Math.random() * 15);
+    const ok = 20 + Math.floor(Math.random() * 40);
+    const total = expired + urgent + nearExpiry + ok;
+    const totalQty = total * (3 + Math.floor(Math.random() * 5));
+    const compliance = Math.floor(Math.random() * 8);
+    const html = weeklyReportHtml({
+      storeCode: store.code,
+      storeName: store.name,
+      weekStart: weekStartStr,
+      weekEnd: weekEndStr,
+      total,
+      totalQty,
+      expired,
+      urgent,
+      nearExpiry,
+      ok,
+      complianceFlags: compliance,
+      topItems: sampleItems(store.code)
+    });
+    await transporter.sendMail({
+      from: `"Expiry Tracker" <${smtpUser}>`,
+      to: toEmail,
+      subject: `[TEST] Weekly Expiry Report \u2014 ${store.code} (${store.name}) \u2014 ${weekStartStr} to ${weekEndStr}`,
+      html
+    });
+    sent.push(store.code);
+  }
+  res.json({ ok: true, sentTo: toEmail, stores: sent });
 });
 var email_default = router4;
 
