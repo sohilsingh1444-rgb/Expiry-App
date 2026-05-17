@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm install -g pnpm && pnpm install && pnpm --filter @workspace/api-server run build",
+  "buildCommand": "npm install -g pnpm && pnpm install",
   "outputDirectory": "artifacts/expiry-scan-app/dist/public",
   "installCommand": "echo 'install handled in buildCommand'",
   "functions": {
