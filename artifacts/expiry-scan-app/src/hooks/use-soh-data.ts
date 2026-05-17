@@ -91,14 +91,17 @@ export function buildSohMaps(rows: any[]): {
 
 function findStoreData(
   byStore: Map<string, { byBarcode: Record<string, number>; byItem: Record<string, number> }>,
-  storeName: string,
+  storeIdentifiers: string[],
 ): { byBarcode: Record<string, number>; byItem: Record<string, number> } | undefined {
-  if (!storeName || byStore.size === 0) return undefined;
-  const needle = storeName.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!needle) return undefined;
-  if (byStore.has(needle)) return byStore.get(needle);
-  for (const [k, v] of byStore) {
-    if (needle.includes(k) || k.includes(needle)) return v;
+  if (!storeIdentifiers.length || byStore.size === 0) return undefined;
+  for (const id of storeIdentifiers) {
+    if (!id) continue;
+    const needle = id.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!needle) continue;
+    if (byStore.has(needle)) return byStore.get(needle);
+    for (const [k, v] of byStore) {
+      if (needle.includes(k) || k.includes(needle)) return v;
+    }
   }
   return undefined;
 }
@@ -147,12 +150,12 @@ export function useSohData() {
     setSohByStore(new Map());
   }, []);
 
-  const lookupSoh = useCallback((barcode: string, itemNumber?: string, storeName?: string): number | undefined => {
+  const lookupSoh = useCallback((barcode: string, itemNumber?: string, storeIdentifiers?: string[]): number | undefined => {
     let nb = String(barcode).trim();
     if (nb.endsWith('.0')) nb = nb.slice(0, -2);
 
-    if (storeName) {
-      const storeData = findStoreData(sohByStore, storeName);
+    if (storeIdentifiers && storeIdentifiers.length > 0) {
+      const storeData = findStoreData(sohByStore, storeIdentifiers);
       if (storeData) {
         const bySb = storeData.byBarcode[nb];
         if (bySb != null) return bySb;
