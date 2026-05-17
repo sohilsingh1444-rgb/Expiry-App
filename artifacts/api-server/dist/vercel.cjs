@@ -103527,8 +103527,7 @@ router4.get("/email/test-report", async (req, res) => {
     { description: "Tip Top Bread White 700g", barcode: "9415176005432", status: "Near Expiry", qty: Math.ceil(Math.random() * 5 + 1), expiryDate: weekEndStr },
     { description: "Pams Butter 500g", barcode: "9415176009876", status: "Near Expiry", qty: Math.ceil(Math.random() * 3 + 1), expiryDate: weekEndStr }
   ].filter((i) => i.status === "Expired" || i.status === "Urgent");
-  const sent = [];
-  for (const store of allStores) {
+  const sends = allStores.map(async (store) => {
     const expired = 2 + Math.floor(Math.random() * 6);
     const urgent = 3 + Math.floor(Math.random() * 10);
     const nearExpiry = 5 + Math.floor(Math.random() * 15);
@@ -103556,8 +103555,9 @@ router4.get("/email/test-report", async (req, res) => {
       subject: `[TEST] Weekly Expiry Report \u2014 ${store.code} (${store.name}) \u2014 ${weekStartStr} to ${weekEndStr}`,
       html
     });
-    sent.push(store.code);
-  }
+    return store.code;
+  });
+  const sent = await Promise.all(sends);
   res.json({ ok: true, sentTo: toEmail, stores: sent });
 });
 var email_default = router4;

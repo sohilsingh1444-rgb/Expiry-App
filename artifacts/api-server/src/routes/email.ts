@@ -374,9 +374,7 @@ router.get("/email/test-report", async (req, res): Promise<void> => {
     { description: "Pams Butter 500g",              barcode: "9415176009876", status: "Near Expiry",qty: Math.ceil(Math.random()*3+1), expiryDate: weekEndStr   },
   ].filter(i => i.status === "Expired" || i.status === "Urgent"); // table only shows expired/urgent
 
-  const sent: string[] = [];
-
-  for (const store of allStores) {
+  const sends = allStores.map(async (store) => {
     const expired    = 2 + Math.floor(Math.random() * 6);
     const urgent     = 3 + Math.floor(Math.random() * 10);
     const nearExpiry = 5 + Math.floor(Math.random() * 15);
@@ -407,9 +405,10 @@ router.get("/email/test-report", async (req, res): Promise<void> => {
       html,
     });
 
-    sent.push(store.code);
-  }
+    return store.code;
+  });
 
+  const sent = await Promise.all(sends);
   res.json({ ok: true, sentTo: toEmail, stores: sent });
 });
 
