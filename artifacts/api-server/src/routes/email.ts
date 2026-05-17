@@ -717,14 +717,54 @@ router.get("/email/test-report", async (req, res): Promise<void> => {
 </body>
 </html>`;
 
+  // Build sample Excel — generate fake scan rows for each store
+  const sampleScanStatuses = ["Expired", "Expired", "Urgent", "Urgent", "Urgent", "Near Expiry", "Near Expiry", "Near Expiry", "OK", "OK", "OK", "OK"];
+  const sampleItems = [
+    { barcode: "9300633102015", itemNumber: "12345", description: "Anchor Full Cream Milk 2L" },
+    { barcode: "9415176001234", itemNumber: "23456", description: "Meadow Fresh Yoghurt 500g" },
+    { barcode: "9310055012345", itemNumber: "34567", description: "Mainland Cheddar Slices 500g" },
+    { barcode: "9300652830017", itemNumber: "45678", description: "Sanitarium Weet-Bix 750g" },
+    { barcode: "9415176005432", itemNumber: "56789", description: "Tip Top Bread White 700g" },
+    { barcode: "9415176009876", itemNumber: "67890", description: "Pams Butter 500g" },
+    { barcode: "9300633201234", itemNumber: "78901", description: "Lewis Road Creamery Milk 1L" },
+    { barcode: "9310055098765", itemNumber: "89012", description: "Puhoi Valley Cheese 200g" },
+  ];
+
+  const scansByStore = new Map<string, { storeCode: string; storeName: string; scans: any[] }>();
+  for (const row of rows) {
+    const scans = sampleScanStatuses.map((status, i) => {
+      const item = sampleItems[i % sampleItems.length]!;
+      const daysLeft = status === "Expired" ? -2 : status === "Urgent" ? 3 : status === "Near Expiry" ? 10 : 25;
+      const expiry = new Date(); expiry.setDate(expiry.getDate() + daysLeft);
+      return {
+        barcode: item.barcode, itemNumber: item.itemNumber, description: item.description,
+        qty: 1 + Math.floor(Math.random() * 5),
+        expiryDate: expiry.toISOString().split("T")[0],
+        scanDate: weekEndStr,
+        daysLeft,
+        status,
+        actionRequired: status === "Expired" ? "Remove from shelf" : status === "Urgent" ? "Markdown/clear" : "",
+        wrongRrp: Math.random() > 0.85,
+        missingSpecialTicket: Math.random() > 0.9,
+        notOnDisplay: false,
+        region: row.region,
+      };
+    });
+    scansByStore.set(row.code, { storeCode: row.code, storeName: row.name, scans });
+  }
+
+  const excelBuffer = await buildWeeklyExcel(scansByStore, weekStartStr, weekEndStr);
+  const filename = `TEST_Expiry_Report_${weekStartStr}_to_${weekEndStr}.xlsx`;
+
   await transporter.sendMail({
     from: `"Expiry Tracker" <${smtpUser}>`,
     to: toEmail,
     subject: `[TEST] All-Stores Weekly Expiry Report — ${weekStartStr} to ${weekEndStr}`,
     html,
+    attachments: [{ filename, content: excelBuffer, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }],
   });
 
-  res.json({ ok: true, sentTo: toEmail, stores: rows.map(r => r.code) });
+  res.json({ ok: true, sentTo: toEmail, stores: rows.map(r => r.code), filename });
 });
 
 export default router;
