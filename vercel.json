@@ -1,6 +1,6 @@
 {
   "installCommand": "pnpm install --ignore-scripts",
-  "buildCommand": "echo 'using pre-built dist'",
+  "buildCommand": "echo done",
   "outputDirectory": "artifacts/expiry-scan-app/dist/public",
   "functions": {
     "api/index.js": {
