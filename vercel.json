@@ -1,5 +1,5 @@
 {
-  "installCommand": "pnpm install --ignore-scripts",
+  "installCommand": "npm install --ignore-scripts",
   "buildCommand": "echo done",
   "outputDirectory": "artifacts/expiry-scan-app/dist/public",
   "functions": {
