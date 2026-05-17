@@ -6,7 +6,7 @@ import { ensureStoresSeeded } from "./admin";
 
 const router: IRouter = Router();
 
-function createTransporter() {
+function createTransporter(pool = false) {
   const smtpUser = process.env.SMTP_USER ?? process.env.GMAIL_USER;
   const smtpPass = process.env.SMTP_PASS ?? process.env.GMAIL_APP_PASSWORD;
 
@@ -19,6 +19,9 @@ function createTransporter() {
       host: "smtp.office365.com",
       port: 587,
       secure: false,
+      pool,
+      maxConnections: 1,
+      maxMessages: Infinity,
       auth: { user: smtpUser, pass: smtpPass },
       tls: { ciphers: "SSLv3" },
     });
@@ -26,6 +29,9 @@ function createTransporter() {
 
   return nodemailer.createTransport({
     service: "gmail",
+    pool,
+    maxConnections: 1,
+    maxMessages: Infinity,
     auth: { user: smtpUser, pass: smtpPass },
   });
 }
@@ -349,7 +355,7 @@ router.get("/email/test-report", async (req, res): Promise<void> => {
     return;
   }
 
-  const transporter = createTransporter();
+  const transporter = createTransporter(true); // pooled — one SMTP connection for all stores
   const smtpUser = process.env.SMTP_USER ?? process.env.GMAIL_USER;
   if (!transporter || !smtpUser) {
     res.status(503).json({ error: "Email credentials not configured on server." });
@@ -409,6 +415,7 @@ router.get("/email/test-report", async (req, res): Promise<void> => {
   });
 
   const sent = await Promise.all(sends);
+  (transporter as any).close?.();
   res.json({ ok: true, sentTo: toEmail, stores: sent });
 });
 

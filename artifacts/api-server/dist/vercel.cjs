@@ -103245,7 +103245,7 @@ var admin_default = router3;
 var import_express4 = __toESM(require_express2(), 1);
 var import_nodemailer = __toESM(require_nodemailer(), 1);
 var router4 = (0, import_express4.Router)();
-function createTransporter() {
+function createTransporter(pool2 = false) {
   const smtpUser = process.env.SMTP_USER ?? process.env.GMAIL_USER;
   const smtpPass = process.env.SMTP_PASS ?? process.env.GMAIL_APP_PASSWORD;
   if (!smtpUser || !smtpPass) return null;
@@ -103255,12 +103255,18 @@ function createTransporter() {
       host: "smtp.office365.com",
       port: 587,
       secure: false,
+      pool: pool2,
+      maxConnections: 1,
+      maxMessages: Infinity,
       auth: { user: smtpUser, pass: smtpPass },
       tls: { ciphers: "SSLv3" }
     });
   }
   return import_nodemailer.default.createTransport({
     service: "gmail",
+    pool: pool2,
+    maxConnections: 1,
+    maxMessages: Infinity,
     auth: { user: smtpUser, pass: smtpPass }
   });
 }
@@ -103506,7 +103512,7 @@ router4.get("/email/test-report", async (req, res) => {
     res.status(400).json({ error: "?to=email is required" });
     return;
   }
-  const transporter = createTransporter();
+  const transporter = createTransporter(true);
   const smtpUser = process.env.SMTP_USER ?? process.env.GMAIL_USER;
   if (!transporter || !smtpUser) {
     res.status(503).json({ error: "Email credentials not configured on server." });
@@ -103558,6 +103564,7 @@ router4.get("/email/test-report", async (req, res) => {
     return store.code;
   });
   const sent = await Promise.all(sends);
+  transporter.close?.();
   res.json({ ok: true, sentTo: toEmail, stores: sent });
 });
 var email_default = router4;
