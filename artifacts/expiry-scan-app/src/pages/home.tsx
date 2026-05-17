@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { format, differenceInDays, parseISO } from "date-fns";
 import type { BarcodeMasterRow } from "@/hooks/use-barcode-master";
 import {
@@ -14,6 +14,8 @@ import {
   ExpiryScanStatus,
 } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOnlineStatus } from "@/hooks/use-online-status";
+import { enqueueOfflineScan } from "@/lib/offline-queue";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -168,6 +170,7 @@ export default function Home() {
   const { sohData, sohByItem, saveSohData, clearSohData, lookupSoh } = useSohData();
   const totalSohItems = Math.max(sohData.size, sohByItem.size);
   const { stores: storeList, getStoreByCode, getStoreRegion } = useStoreList();
+  const { isOnline, pendingCount, refreshPendingCount } = useOnlineStatus();
 
   const setupForm = useForm<z.infer<typeof setupSchema>>({
     resolver: zodResolver(setupSchema),
@@ -393,7 +396,7 @@ export default function Home() {
     } catch {}
   };
 
-  const onScanSubmit = (values: z.infer<typeof scanSchema>) => {
+  const onScanSubmit = useCallback(async (values: z.infer<typeof scanSchema>) => {
     if (!sessionId) {
       toast({ title: "Session not ready", variant: "destructive" });
       return;
@@ -405,28 +408,49 @@ export default function Home() {
       barcodeStr = barcodeStr.slice(0, -2);
     }
 
-    createScan.mutate({
-      data: {
-        sessionId,
-        pdUserName: setupData.pdUserName,
-        storeLocation: setupData.storeLocation,
-        scanDate: setupData.scanDate,
-        barcode: barcodeStr,
-        itemNumber: values.itemNumber,
-        description: values.description,
-        qty: values.qty,
-        expiryDate: values.expiryDate || setupData.scanDate,
-        remarks: values.remarks,
-        ...(matchedItem?.rrp ? { rrp: parseFloat(String(matchedItem.rrp)) } : {}),
-        ...(matchedItem?.special ? { specialPrice: parseFloat(String(matchedItem.special)) } : {}),
-        ...(lookupSoh(barcodeStr, values.itemNumber) != null ? { systemSoh: lookupSoh(barcodeStr, values.itemNumber)! } : {}),
-        wrongRrp: values.wrongRrp,
-        missingSpecialTicket: values.missingSpecialTicket,
-        notOnDisplay: values.notOnDisplay,
-        ...(values.notOnDisplay ? { bulkPullQty: values.qty } : {}),
-      } as any
-    });
-  };
+    const scanPayload = {
+      sessionId,
+      pdUserName: setupData.pdUserName,
+      storeLocation: setupData.storeLocation,
+      scanDate: setupData.scanDate,
+      barcode: barcodeStr,
+      itemNumber: values.itemNumber,
+      description: values.description,
+      qty: values.qty,
+      expiryDate: values.expiryDate || setupData.scanDate,
+      remarks: values.remarks,
+      ...(matchedItem?.rrp ? { rrp: parseFloat(String(matchedItem.rrp)) } : {}),
+      ...(matchedItem?.special ? { specialPrice: parseFloat(String(matchedItem.special)) } : {}),
+      ...(lookupSoh(barcodeStr, values.itemNumber) != null ? { systemSoh: lookupSoh(barcodeStr, values.itemNumber)! } : {}),
+      wrongRrp: values.wrongRrp,
+      missingSpecialTicket: values.missingSpecialTicket,
+      notOnDisplay: values.notOnDisplay,
+      ...(values.notOnDisplay ? { bulkPullQty: values.qty } : {}),
+    };
+
+    if (!isOnline) {
+      // Queue locally and add optimistic entry to UI
+      await enqueueOfflineScan(scanPayload as Record<string, unknown>);
+      await refreshPendingCount();
+
+      const expiryDate = new Date(String(scanPayload.expiryDate));
+      const msPerDay = 1000 * 60 * 60 * 24;
+      const daysLeft = Math.ceil((expiryDate.getTime() - new Date().setHours(0,0,0,0)) / msPerDay);
+      const status: "Expired" | "Urgent" | "Near Expiry" | "OK" =
+        daysLeft <= 0 ? "Expired" : daysLeft <= 7 ? "Urgent" : daysLeft <= 30 ? "Near Expiry" : "OK";
+      const optimistic = { id: -Date.now(), ...scanPayload, expiryDate, scanDate: new Date(scanPayload.scanDate), daysLeft, status, actionRequired: null, createdAt: new Date(), specialPrice: null, systemSoh: null, rrp: null, bulkPullQty: null, wrongRrp: false, missingSpecialTicket: false, notOnDisplay: false, itemNumber: scanPayload.itemNumber ?? null, description: scanPayload.description ?? null, remarks: scanPayload.remarks ?? null };
+      queryClient.setQueryData(getListExpiryScansQueryKey(sessionId), (old: unknown) =>
+        Array.isArray(old) ? [optimistic, ...old] : [optimistic]
+      );
+
+      scanForm.reset({ barcode: "", itemNumber: "", description: "", qty: "" as unknown as number, expiryDate: "", remarks: "", wrongRrp: false, missingSpecialTicket: false, notOnDisplay: false });
+      setTimeout(() => { barcodeInputRef.current?.focus(); }, 50);
+      toast({ title: "Saved offline", description: "Will sync when connection is restored." });
+      return;
+    }
+
+    createScan.mutate({ data: scanPayload as any });
+  }, [sessionId, setupData, isOnline, matchedItem, lookupSoh, enqueueOfflineScan, refreshPendingCount, queryClient, scanForm, barcodeInputRef, toast, createScan]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -990,8 +1014,14 @@ export default function Home() {
                     className="w-full h-12 mt-4 font-bold text-lg bg-zinc-950 text-white hover:bg-zinc-800 transition-colors"
                     disabled={createScan.isPending || !sessionId}
                   >
-                    {createScan.isPending ? "Saving..." : "Save Scan"}
+                    {createScan.isPending ? "Saving..." : !isOnline ? "Save Offline" : "Save Scan"}
                   </Button>
+                  {pendingCount > 0 && isOnline && (
+                    <p className="text-xs text-blue-600 text-center mt-1">{pendingCount} scan{pendingCount !== 1 ? "s" : ""} syncing…</p>
+                  )}
+                  {pendingCount > 0 && !isOnline && (
+                    <p className="text-xs text-amber-600 text-center mt-1">{pendingCount} scan{pendingCount !== 1 ? "s" : ""} queued offline</p>
+                  )}
                 </form>
               </Form>
             </CardContent>
