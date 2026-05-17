@@ -355,7 +355,7 @@ router.get("/email/test-report", async (req, res): Promise<void> => {
     return;
   }
 
-  const transporter = createTransporter(true); // pooled — one SMTP connection for all stores
+  const transporter = createTransporter();
   const smtpUser = process.env.SMTP_USER ?? process.env.GMAIL_USER;
   if (!transporter || !smtpUser) {
     res.status(503).json({ error: "Email credentials not configured on server." });
@@ -370,53 +370,118 @@ router.get("/email/test-report", async (req, res): Promise<void> => {
   const weekStartStr = weekStart.toISOString().split("T")[0]!;
   const weekEndStr = today.toISOString().split("T")[0]!;
 
-  // Sample items varied per store so each email looks distinct
-  const sampleItems = (storeCode: string) => [
-    { description: "Anchor Full Cream Milk 2L",     barcode: "9300633102015", status: "Expired",    qty: Math.ceil(Math.random()*4+1), expiryDate: weekStartStr },
-    { description: "Meadow Fresh Yoghurt 500g",     barcode: "9415176001234", status: "Expired",    qty: Math.ceil(Math.random()*3+1), expiryDate: weekStartStr },
-    { description: "Mainland Cheddar Slices 500g",  barcode: "9310055012345", status: "Urgent",     qty: Math.ceil(Math.random()*6+2), expiryDate: weekEndStr   },
-    { description: "Sanitarium Weet-Bix 750g",      barcode: "9300652830017", status: "Urgent",     qty: Math.ceil(Math.random()*4+1), expiryDate: weekEndStr   },
-    { description: "Tip Top Bread White 700g",      barcode: "9415176005432", status: "Near Expiry",qty: Math.ceil(Math.random()*5+1), expiryDate: weekEndStr   },
-    { description: "Pams Butter 500g",              barcode: "9415176009876", status: "Near Expiry",qty: Math.ceil(Math.random()*3+1), expiryDate: weekEndStr   },
-  ].filter(i => i.status === "Expired" || i.status === "Urgent"); // table only shows expired/urgent
-
-  const sends = allStores.map(async (store) => {
+  // Build one consolidated email with all stores as a summary table
+  type StoreRow = { code: string; name: string; region: string; total: number; expired: number; urgent: number; nearExpiry: number; ok: number; totalQty: number; compliance: number };
+  const rows: StoreRow[] = allStores.map(store => {
     const expired    = 2 + Math.floor(Math.random() * 6);
     const urgent     = 3 + Math.floor(Math.random() * 10);
     const nearExpiry = 5 + Math.floor(Math.random() * 15);
     const ok         = 20 + Math.floor(Math.random() * 40);
     const total      = expired + urgent + nearExpiry + ok;
     const totalQty   = total * (3 + Math.floor(Math.random() * 5));
-    const compliance = Math.floor(Math.random() * 8);
-
-    const html = weeklyReportHtml({
-      storeCode: store.code,
-      storeName: store.name,
-      weekStart: weekStartStr,
-      weekEnd: weekEndStr,
-      total,
-      totalQty,
-      expired,
-      urgent,
-      nearExpiry,
-      ok,
-      complianceFlags: compliance,
-      topItems: sampleItems(store.code),
-    });
-
-    await transporter.sendMail({
-      from: `"Expiry Tracker" <${smtpUser}>`,
-      to: toEmail,
-      subject: `[TEST] Weekly Expiry Report — ${store.code} (${store.name}) — ${weekStartStr} to ${weekEndStr}`,
-      html,
-    });
-
-    return store.code;
+    return { code: store.code, name: store.name, region: store.region ?? "", total, expired, urgent, nearExpiry, ok, totalQty, compliance: Math.floor(Math.random() * 8) };
   });
 
-  const sent = await Promise.all(sends);
-  (transporter as any).close?.();
-  res.json({ ok: true, sentTo: toEmail, stores: sent });
+  const tableRows = rows.map(r => `
+    <tr style="border-bottom:1px solid #f0f0f0">
+      <td style="padding:7px 10px;font-size:13px;font-weight:600;color:#111827">${r.name}</td>
+      <td style="padding:7px 10px;font-size:12px;color:#6b7280;text-align:center">${r.code}</td>
+      <td style="padding:7px 10px;font-size:13px;text-align:center;color:#111827;font-weight:600">${r.total}</td>
+      <td style="padding:7px 10px;font-size:13px;text-align:center;color:#dc2626;font-weight:700">${r.expired}</td>
+      <td style="padding:7px 10px;font-size:13px;text-align:center;color:#ea580c;font-weight:700">${r.urgent}</td>
+      <td style="padding:7px 10px;font-size:13px;text-align:center;color:#d97706">${r.nearExpiry}</td>
+      <td style="padding:7px 10px;font-size:13px;text-align:center;color:#16a34a">${r.ok}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:center;color:#6b7280">${r.totalQty}</td>
+      <td style="padding:7px 10px;font-size:12px;text-align:center;color:#7c3aed">${r.compliance}</td>
+    </tr>`).join("");
+
+  const totalAll = rows.reduce((s, r) => s + r.total, 0);
+  const expiredAll = rows.reduce((s, r) => s + r.expired, 0);
+  const urgentAll = rows.reduce((s, r) => s + r.urgent, 0);
+  const nearAll = rows.reduce((s, r) => s + r.nearExpiry, 0);
+
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Inter,Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 0">
+    <tr><td align="center">
+      <table width="700" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+        <tr><td style="background:#111827;padding:28px 32px">
+          <div style="color:#f59e0b;font-size:18px;font-weight:700">⏱ Expiry Tracker</div>
+          <div style="color:#ffffff;font-size:22px;font-weight:700;margin-top:4px">All-Stores Weekly Report</div>
+          <div style="color:#9ca3af;font-size:13px;margin-top:2px">${weekStartStr} – ${weekEndStr} &nbsp;·&nbsp; ${rows.length} stores &nbsp;·&nbsp; [TEST]</div>
+        </td></tr>
+        <!-- Network totals -->
+        <tr><td style="padding:24px 32px 16px">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td width="25%" style="padding:4px">
+                <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px;text-align:center">
+                  <div style="font-size:26px;font-weight:700;color:#111827">${totalAll}</div>
+                  <div style="font-size:11px;color:#6b7280;margin-top:2px;text-transform:uppercase;letter-spacing:.5px">Network Scans</div>
+                </div>
+              </td>
+              <td width="25%" style="padding:4px">
+                <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px;text-align:center">
+                  <div style="font-size:26px;font-weight:700;color:#dc2626">${expiredAll}</div>
+                  <div style="font-size:11px;color:#dc2626;margin-top:2px;text-transform:uppercase;letter-spacing:.5px">Total Expired</div>
+                </div>
+              </td>
+              <td width="25%" style="padding:4px">
+                <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:14px;text-align:center">
+                  <div style="font-size:26px;font-weight:700;color:#ea580c">${urgentAll}</div>
+                  <div style="font-size:11px;color:#ea580c;margin-top:2px;text-transform:uppercase;letter-spacing:.5px">Total Urgent</div>
+                </div>
+              </td>
+              <td width="25%" style="padding:4px">
+                <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;text-align:center">
+                  <div style="font-size:26px;font-weight:700;color:#d97706">${nearAll}</div>
+                  <div style="font-size:11px;color:#d97706;margin-top:2px;text-transform:uppercase;letter-spacing:.5px">Near Expiry</div>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+        <!-- Per-store table -->
+        <tr><td style="padding:0 32px 28px">
+          <div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:10px">Breakdown by Store</div>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+            <thead>
+              <tr style="background:#f9fafb">
+                <th style="padding:8px 10px;font-size:11px;font-weight:600;color:#6b7280;text-align:left;text-transform:uppercase;letter-spacing:.5px">Store</th>
+                <th style="padding:8px 10px;font-size:11px;font-weight:600;color:#6b7280;text-align:center;text-transform:uppercase;letter-spacing:.5px">Code</th>
+                <th style="padding:8px 10px;font-size:11px;font-weight:600;color:#6b7280;text-align:center;text-transform:uppercase;letter-spacing:.5px">Total</th>
+                <th style="padding:8px 10px;font-size:11px;font-weight:600;color:#dc2626;text-align:center;text-transform:uppercase;letter-spacing:.5px">Expired</th>
+                <th style="padding:8px 10px;font-size:11px;font-weight:600;color:#ea580c;text-align:center;text-transform:uppercase;letter-spacing:.5px">Urgent</th>
+                <th style="padding:8px 10px;font-size:11px;font-weight:600;color:#d97706;text-align:center;text-transform:uppercase;letter-spacing:.5px">Near</th>
+                <th style="padding:8px 10px;font-size:11px;font-weight:600;color:#16a34a;text-align:center;text-transform:uppercase;letter-spacing:.5px">OK</th>
+                <th style="padding:8px 10px;font-size:11px;font-weight:600;color:#6b7280;text-align:center;text-transform:uppercase;letter-spacing:.5px">Qty</th>
+                <th style="padding:8px 10px;font-size:11px;font-weight:600;color:#7c3aed;text-align:center;text-transform:uppercase;letter-spacing:.5px">Flags</th>
+              </tr>
+            </thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:16px 32px;border-top:1px solid #e5e7eb">
+          <div style="font-size:11px;color:#9ca3af;text-align:center">
+            Generated by Expiry Tracker · ${new Date().toLocaleDateString("en-FJ", { timeZone: "Pacific/Fiji", weekday: "long", year: "numeric", month: "long", day: "numeric" })} · This is a test report with sample data
+          </div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await transporter.sendMail({
+    from: `"Expiry Tracker" <${smtpUser}>`,
+    to: toEmail,
+    subject: `[TEST] All-Stores Weekly Expiry Report — ${weekStartStr} to ${weekEndStr}`,
+    html,
+  });
+
+  res.json({ ok: true, sentTo: toEmail, stores: rows.map(r => r.code) });
 });
 
 export default router;
