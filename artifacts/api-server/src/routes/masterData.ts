@@ -40,16 +40,16 @@ router.get("/barcode-master/meta", async (_req, res): Promise<void> => {
 
 router.get("/barcode-master", async (_req, res): Promise<void> => {
   const mapJson = await getSetting("bm_map_json");
-  const byItemJson = await getSetting("bm_by_item_json");
   const uploadedAt = await getSetting("bm_uploaded_at");
   const count = await getSetting("bm_count");
+  // Only send `map` — byItem is rebuilt client-side to halve payload size.
+  // Use level 9 (max compression) to stay within Vercel's 4.5 MB response limit.
   const payload = JSON.stringify({
     map: mapJson ? JSON.parse(mapJson) : {},
-    byItem: byItemJson ? JSON.parse(byItemJson) : {},
     uploadedAt: uploadedAt ?? null,
     count: count ? Number(count) : 0,
   });
-  const compressed = gzipSync(Buffer.from(payload));
+  const compressed = gzipSync(Buffer.from(payload), { level: 9 });
   res.setHeader("Content-Encoding", "gzip");
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Vary", "Accept-Encoding");
@@ -125,13 +125,18 @@ router.get("/soh-data", async (_req, res): Promise<void> => {
   const byStoreJson = await getSetting("soh_by_store_json");
   const uploadedAt = await getSetting("soh_uploaded_at");
   const count = await getSetting("soh_count");
-  res.json({
+  const payload = JSON.stringify({
     byBarcode: byBarcodeJson ? JSON.parse(byBarcodeJson) : {},
     byItem: byItemJson ? JSON.parse(byItemJson) : {},
     byStore: byStoreJson ? JSON.parse(byStoreJson) : {},
     uploadedAt: uploadedAt ?? null,
     count: count ? Number(count) : 0,
   });
+  const compressed = gzipSync(Buffer.from(payload), { level: 9 });
+  res.setHeader("Content-Encoding", "gzip");
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Vary", "Accept-Encoding");
+  res.send(compressed);
 });
 
 router.post("/admin/soh-data", async (req, res): Promise<void> => {

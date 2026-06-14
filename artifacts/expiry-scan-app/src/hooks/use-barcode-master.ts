@@ -102,9 +102,16 @@ export function useBarcodeMaster() {
           if (meta.uploadedAt && meta.count > 0) {
             const dataRes = await fetch(`${getApiBase()}/api/barcode-master`);
             if (dataRes.ok) {
-              const data: { map: Record<string, BarcodeMasterRow>; byItem: Record<string, BarcodeMasterRow> } = await dataRes.json();
+              const data: { map: Record<string, BarcodeMasterRow> } = await dataRes.json();
               setMasterData(new Map(Object.entries(data.map)));
-              setMasterByItem(new Map(Object.entries(data.byItem)));
+              // Rebuild byItem client-side (server no longer sends it to halve payload size)
+              const byItem = new Map<string, BarcodeMasterRow>();
+              for (const row of Object.values(data.map)) {
+                if (row.itemNumber && (!byItem.has(row.itemNumber) || (row.rrp && !byItem.get(row.itemNumber)!.rrp))) {
+                  byItem.set(row.itemNumber, row);
+                }
+              }
+              setMasterByItem(byItem);
             }
           }
         }
