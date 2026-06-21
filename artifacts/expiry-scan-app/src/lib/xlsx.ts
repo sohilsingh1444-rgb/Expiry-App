@@ -307,8 +307,8 @@ export function buildSpecialsMap(rows: any[]): {
 
     if (!region) continue;
 
-    // Store special price — take lowest price per item+region
-    if (dealPrice && !isNaN(parseFloat(dealPrice))) {
+    // Store special price — take lowest POSITIVE price per item+region (skip 0 = no deal)
+    if (dealPrice && !isNaN(parseFloat(dealPrice)) && parseFloat(dealPrice) > 0) {
       const newPrice = parseFloat(dealPrice);
       if (!byItem[itemNo]) byItem[itemNo] = {};
       if (region === 'CR') {
