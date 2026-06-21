@@ -268,7 +268,8 @@ export function buildSpecialsMap(rows: any[]): {
 } {
   const byItem: Record<string, { special_CR?: string; special_CR_start?: string; special_CR_end?: string; special_NR?: string; special_NR_start?: string; special_NR_end?: string; special_WR?: string; special_WR_start?: string; special_WR_end?: string }> = {};
   const rrpByItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }> = {};
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  // Track the latest ending date seen per item+region so most-recent offer wins
+  const specialsLatestEnd: Record<string, { CR?: Date; NR?: Date; WR?: Date }> = {};
 
   const norm = (s: string) => s.toLowerCase().replace(/[\s_\-\.]/g, '');
 
@@ -293,10 +294,9 @@ export function buildSpecialsMap(rows: any[]): {
     const itemNo = getValExact('No_', 'No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
     if (!itemNo) continue;
 
-    // Parse and check date range — skip expired rows
+    // Parse dates — NO expiry filter; user uploads current file, all rows are treated as valid
     const startDate = parseDMY(getValExact('Starting Date', 'startingdate', 'startdate'));
     const endDate = parseDMY(getValExact('Ending Date', 'endingdate', 'enddate'));
-    if (endDate && endDate < today) continue;  // expired — skip
 
     const startStr = fmtDMY(startDate);
     const endStr = fmtDMY(endDate);
@@ -333,19 +333,32 @@ export function buildSpecialsMap(rows: any[]): {
 
     if (!region) continue;
 
-    // Store special price — take lowest POSITIVE price per item+region (skip 0 = no deal)
+    // Store special price — per item+region, take the row with the LATEST ending date
+    // (most recent month's offer wins over historical data; positive price required)
     if (dealPrice && !isNaN(parseFloat(dealPrice)) && parseFloat(dealPrice) > 0) {
       const newPrice = parseFloat(dealPrice);
       if (!byItem[itemNo]) byItem[itemNo] = {};
       if (region === 'CR') {
-        const cur = byItem[itemNo].special_CR ? parseFloat(byItem[itemNo].special_CR!) : Infinity;
-        if (newPrice < cur) { byItem[itemNo].special_CR = dealPrice; byItem[itemNo].special_CR_start = startStr; byItem[itemNo].special_CR_end = endStr; }
+        const prevEnd = specialsLatestEnd[itemNo]?.CR;
+        if (!byItem[itemNo].special_CR || !prevEnd || (endDate && endDate >= prevEnd) || (!endDate && newPrice > 0)) {
+          byItem[itemNo].special_CR = dealPrice; byItem[itemNo].special_CR_start = startStr; byItem[itemNo].special_CR_end = endStr;
+          if (!specialsLatestEnd[itemNo]) specialsLatestEnd[itemNo] = {};
+          if (endDate) specialsLatestEnd[itemNo].CR = endDate;
+        }
       } else if (region === 'NR') {
-        const cur = byItem[itemNo].special_NR ? parseFloat(byItem[itemNo].special_NR!) : Infinity;
-        if (newPrice < cur) { byItem[itemNo].special_NR = dealPrice; byItem[itemNo].special_NR_start = startStr; byItem[itemNo].special_NR_end = endStr; }
+        const prevEnd = specialsLatestEnd[itemNo]?.NR;
+        if (!byItem[itemNo].special_NR || !prevEnd || (endDate && endDate >= prevEnd) || (!endDate && newPrice > 0)) {
+          byItem[itemNo].special_NR = dealPrice; byItem[itemNo].special_NR_start = startStr; byItem[itemNo].special_NR_end = endStr;
+          if (!specialsLatestEnd[itemNo]) specialsLatestEnd[itemNo] = {};
+          if (endDate) specialsLatestEnd[itemNo].NR = endDate;
+        }
       } else if (region === 'WR') {
-        const cur = byItem[itemNo].special_WR ? parseFloat(byItem[itemNo].special_WR!) : Infinity;
-        if (newPrice < cur) { byItem[itemNo].special_WR = dealPrice; byItem[itemNo].special_WR_start = startStr; byItem[itemNo].special_WR_end = endStr; }
+        const prevEnd = specialsLatestEnd[itemNo]?.WR;
+        if (!byItem[itemNo].special_WR || !prevEnd || (endDate && endDate >= prevEnd) || (!endDate && newPrice > 0)) {
+          byItem[itemNo].special_WR = dealPrice; byItem[itemNo].special_WR_start = startStr; byItem[itemNo].special_WR_end = endStr;
+          if (!specialsLatestEnd[itemNo]) specialsLatestEnd[itemNo] = {};
+          if (endDate) specialsLatestEnd[itemNo].WR = endDate;
+        }
       }
     }
 
