@@ -142,45 +142,64 @@ export async function parseRrpFile(file: File): Promise<any[]> {
 }
 
 // Builds { byItem: Record<itemNo, { rrp_CR, rrp_NR, rrp_WR }> }
+// Handles two file formats:
+//   1. Customer Price Group: Sales Code (CR/NR/WR) | Item No. | Unit Price Including VAT
+//   2. Specials/Offers file: OfferDescription (-CR/-NR/-WR suffix) | No_ | Standard Price Including VAT
 export function buildRrpMap(rows: any[]): {
   byItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }>;
   count: number;
 } {
   const byItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }> = {};
+  if (!rows.length) return { byItem, count: 0 };
+
+  const norm = (s: string) => s.toLowerCase().replace(/[\s_\-\.]/g, '');
+  const firstKeys = Object.keys(rows[0]);
+
+  // Detect file format by checking for Specials-specific columns
+  const isSpecialsFormat = firstKeys.some(k => norm(k) === norm('OfferDescription') || norm(k) === norm('Offer No_'));
+
+  const getValExact = (row: any, keys: string[], ...names: string[]) => {
+    for (const n of names) {
+      const nn = norm(n);
+      const k = keys.find(k => norm(k) === nn);
+      if (k) return String(row[k] ?? '').trim();
+    }
+    for (const n of names) {
+      const nn = norm(n);
+      const matches = keys.filter(k => norm(k).includes(nn)).sort((a, b) => norm(a).length - norm(b).length);
+      if (matches.length) return String(row[matches[0]] ?? '').trim();
+    }
+    return '';
+  };
 
   for (const row of rows) {
     const keys = Object.keys(row);
-    const norm = (s: string) => s.toLowerCase().replace(/[\s_\-\.]/g, '');
+    let itemNo = '';
+    let price = '';
+    let region = '';
 
-    // Exact-priority lookup: try each pattern in order, return first full match
-    const getVal = (...names: string[]) => {
-      for (const n of names) {
-        const nn = norm(n);
-        const k = keys.find(k => norm(k) === nn);
-        if (k) return String(row[k] ?? '').trim();
-      }
-      // Fallback: substring match (but prefer longer key match to avoid false positives)
-      for (const n of names) {
-        const nn = norm(n);
-        const matches = keys.filter(k => norm(k).includes(nn));
-        // prefer exact or shortest match
-        matches.sort((a, b) => norm(a).length - norm(b).length);
-        if (matches.length) return String(row[matches[0]] ?? '').trim();
-      }
-      return '';
-    };
+    if (isSpecialsFormat) {
+      // Specials/Offers file: use Standard Price Including VAT as RRP
+      itemNo = getValExact(row, keys, 'No_', 'No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
+      price = getValExact(row, keys, 'Standard Price Including VAT', 'standardpriceincludingvat', 'Standard Price', 'standardprice');
+      const offerDesc = getValExact(row, keys, 'OfferDescription', 'offerdescription').toUpperCase();
+      const priceGroup = getValExact(row, keys, 'Price Group', 'pricegroup').toUpperCase().trim();
+      if (/-NR\b/.test(offerDesc) || priceGroup === 'NR') region = 'NR';
+      else if (/-CR\b/.test(offerDesc) || priceGroup === 'CR') region = 'CR';
+      else if (/-WR\b/.test(offerDesc) || priceGroup === 'WR') region = 'WR';
+    } else {
+      // Customer Price Group file
+      itemNo = getValExact(row, keys, 'Item No', 'Item No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
+      price = getValExact(row, keys, 'Unit Price Including VAT', 'unitpriceincludingvat', 'Unit Price', 'unitprice');
+      region = getValExact(row, keys, 'Sales Code', 'salescode').toUpperCase();
+    }
 
-    // "Sales Code" is the region column (CR / NR / WR) — must not match "Unit of Measure Code"
-    const salesCode = getVal('Sales Code', 'salescode').toUpperCase();
-    const itemNo = getVal('Item No', 'Item No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
-    const price = getVal('Unit Price Including VAT', 'unitpriceincludingvat', 'Unit Price', 'unitprice', 'Price', 'RRP');
-
-    if (!itemNo || !price || !salesCode) continue;
+    if (!itemNo || !price || !region) continue;
 
     if (!byItem[itemNo]) byItem[itemNo] = {};
-    if (salesCode === 'CR') byItem[itemNo].rrp_CR = price;
-    else if (salesCode === 'NR') byItem[itemNo].rrp_NR = price;
-    else if (salesCode === 'WR') byItem[itemNo].rrp_WR = price;
+    if (region === 'CR' && !byItem[itemNo].rrp_CR) byItem[itemNo].rrp_CR = price;
+    else if (region === 'NR' && !byItem[itemNo].rrp_NR) byItem[itemNo].rrp_NR = price;
+    else if (region === 'WR' && !byItem[itemNo].rrp_WR) byItem[itemNo].rrp_WR = price;
   }
 
   return { byItem, count: Object.keys(byItem).length };
