@@ -160,6 +160,15 @@ export default function ItUploadPage() {
         return;
       }
       const { byItem, count } = buildRrpMap(rows);
+      if (Object.keys(byItem).length === 0) {
+        const detectedCols = Object.keys(rows[0] ?? {}).join(", ") || "none";
+        toast({
+          title: "No RRP data found",
+          description: `Parser found ${rows.length} rows but 0 valid entries. Columns detected: ${detectedCols}`,
+          variant: "destructive",
+        });
+        return;
+      }
       const res = await fetch(apiUrl("/admin/rrp-data"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": pw },
