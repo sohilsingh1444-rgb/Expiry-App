@@ -517,12 +517,18 @@ export default function Home() {
     try {
       const rows = await parseSpecialsFile(file);
       const { byItem, rrpByItem, count } = buildSpecialsMap(rows);
+      const specialsItems = Object.keys(byItem).length;
+      const rrpItems = Object.keys(rrpByItem).length;
       if (count === 0) {
-        toast({ title: "No Specials data found", description: "Check that the file has OfferDescription with -CR/-NR/-WR suffix and a Deal Price column.", variant: "destructive" });
+        const cols = rows.length > 0 ? Object.keys(rows[0]).slice(0, 8).join(', ') : 'no columns found';
+        toast({ title: "No data matched", description: `Columns detected: ${cols}. Need OfferDescription with NR/CR/WR or Price Group NR/CR/WR.`, variant: "destructive" });
       } else {
-        saveSpecialsData(byItem);
-        if (Object.keys(rrpByItem).length > 0) saveRrpData(rrpByItem);
-        toast({ title: "Specials Data Uploaded", description: `Merged ${count.toLocaleString()} items into barcode lookup.` });
+        if (specialsItems > 0) saveSpecialsData(byItem);
+        if (rrpItems > 0) saveRrpData(rrpByItem);
+        const parts = [];
+        if (specialsItems > 0) parts.push(`${specialsItems.toLocaleString()} deal prices`);
+        if (rrpItems > 0) parts.push(`${rrpItems.toLocaleString()} RRP prices`);
+        toast({ title: "Specials Data Uploaded", description: `Loaded ${parts.join(' and ')}.` });
       }
     } catch {
       toast({ title: "Upload Failed", description: "Failed to parse the Specials file.", variant: "destructive" });

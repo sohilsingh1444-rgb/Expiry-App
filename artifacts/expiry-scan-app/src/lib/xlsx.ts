@@ -269,14 +269,16 @@ export function buildSpecialsMap(rows: any[]): {
     const stdPrice = getValExact('Standard Price Including VAT', 'standardpriceincludingvat')
       || getValExact('Standard Price', 'standardprice');
 
-    // Region from offer description suffix, then Price Group
+    // Region from offer description suffix, then Price Group, then Variant Code
     const offerDesc = getValExact('OfferDescription', 'offerdescription', 'offername').toUpperCase();
     const priceGroup = getValExact('Price Group', 'pricegroup').toUpperCase().trim();
+    const variantCode = getValExact('Variant Code', 'variantcode').toUpperCase().trim();
 
     let region = '';
-    if (/-NR\b/.test(offerDesc) || priceGroup === 'NR') region = 'NR';
-    else if (/-CR\b/.test(offerDesc) || priceGroup === 'CR') region = 'CR';
-    else if (/-WR\b/.test(offerDesc) || priceGroup === 'WR') region = 'WR';
+    // Check hyphen-suffix first, then space-suffix, then standalone word, then price group, then variant code
+    if (/-NR\b/.test(offerDesc) || /\bNR\b/.test(offerDesc) || priceGroup === 'NR' || variantCode === 'NR') region = 'NR';
+    else if (/-CR\b/.test(offerDesc) || /\bCR\b/.test(offerDesc) || priceGroup === 'CR' || variantCode === 'CR') region = 'CR';
+    else if (/-WR\b/.test(offerDesc) || /\bWR\b/.test(offerDesc) || priceGroup === 'WR' || variantCode === 'WR') region = 'WR';
 
     if (!region) continue;
 
@@ -297,7 +299,9 @@ export function buildSpecialsMap(rows: any[]): {
     }
   }
 
-  return { byItem, rrpByItem, count: Object.keys(byItem).length };
+  const specialsCount = Object.keys(byItem).length;
+  const rrpItemCount = Object.keys(rrpByItem).length;
+  return { byItem, rrpByItem, count: Math.max(specialsCount, rrpItemCount) };
 }
 
 export async function parseSohFile(file: File): Promise<any[]> {
