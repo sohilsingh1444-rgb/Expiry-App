@@ -367,31 +367,35 @@ export default function ItUploadPage() {
           </CardContent>
         </Card>
 
-        {/* 2. RRP Data — auto-populated from Specials file */}
-        <Card className="border-dashed opacity-80">
+        {/* 2. RRP Data */}
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Tag className="w-4 h-4 text-emerald-600" />
               RRP Data
             </CardTitle>
-            <CardDescription className="text-xs text-gray-500">Auto-extracted from Specials file (Standard Price Including VAT) — no separate upload needed</CardDescription>
+            <CardDescription className="text-xs text-gray-500">Customer Price Group file — columns: Sales Code (CR/NR/WR), Item No., Unit Price Including VAT</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {rrpMeta.count > 0 ? (
-              <>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Current items</span>
-                  <span className="font-medium">{rrpMeta.count.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Last updated</span>
-                  <span className="text-gray-700">{format(parseISO(rrpMeta.uploadedAt!), "d MMM yyyy, h:mm a")}</span>
-                </div>
-                <p className="text-xs text-emerald-600">✓ Populated automatically when Specials file is uploaded above</p>
-              </>
-            ) : (
-              <p className="text-sm text-gray-400">Will be populated when Specials / Offers file is uploaded.</p>
+            {rrpMeta.count > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Current items</span>
+                <span className="font-medium">{rrpMeta.count.toLocaleString()}</span>
+              </div>
             )}
+            {rrpMeta.uploadedAt ? (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Last uploaded</span>
+                <span className="text-gray-700">{format(parseISO(rrpMeta.uploadedAt), "d MMM yyyy, h:mm a")}</span>
+              </div>
+            ) : (
+              <p className="text-sm text-amber-600">No file uploaded yet.</p>
+            )}
+            <input ref={rrpFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleRrpUpload} />
+            <Button className="w-full gap-2" onClick={() => rrpFileRef.current?.click()} disabled={rrpUploading}>
+              <Upload className="w-4 h-4" />
+              {rrpUploading ? "Uploading…" : rrpMeta.count > 0 ? "Replace file" : "Upload file"}
+            </Button>
           </CardContent>
         </Card>
 
