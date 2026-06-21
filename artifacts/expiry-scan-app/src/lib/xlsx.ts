@@ -150,14 +150,30 @@ export function buildRrpMap(rows: any[]): {
 
   for (const row of rows) {
     const keys = Object.keys(row);
+    const norm = (s: string) => s.toLowerCase().replace(/[\s_\-\.]/g, '');
+
+    // Exact-priority lookup: try each pattern in order, return first full match
     const getVal = (...names: string[]) => {
-      const k = keys.find(k => names.some(n => k.toLowerCase().replace(/[\s_\-]/g, '').includes(n.toLowerCase().replace(/[\s_\-]/g, ''))));
-      return k ? String(row[k] ?? '').trim() : '';
+      for (const n of names) {
+        const nn = norm(n);
+        const k = keys.find(k => norm(k) === nn);
+        if (k) return String(row[k] ?? '').trim();
+      }
+      // Fallback: substring match (but prefer longer key match to avoid false positives)
+      for (const n of names) {
+        const nn = norm(n);
+        const matches = keys.filter(k => norm(k).includes(nn));
+        // prefer exact or shortest match
+        matches.sort((a, b) => norm(a).length - norm(b).length);
+        if (matches.length) return String(row[matches[0]] ?? '').trim();
+      }
+      return '';
     };
 
-    const salesCode = getVal('salescode', 'code', 'region').toUpperCase();
-    const itemNo = getVal('itemno', 'itemnumber', 'item').replace(/\.0$/, '').trim();
-    const price = getVal('unitprice', 'price', 'rrp', 'unitpriceincludingvat');
+    // "Sales Code" is the region column (CR / NR / WR) — must not match "Unit of Measure Code"
+    const salesCode = getVal('Sales Code', 'salescode').toUpperCase();
+    const itemNo = getVal('Item No', 'Item No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
+    const price = getVal('Unit Price Including VAT', 'unitpriceincludingvat', 'Unit Price', 'unitprice', 'Price', 'RRP');
 
     if (!itemNo || !price || !salesCode) continue;
 
