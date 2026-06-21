@@ -206,45 +206,79 @@ export async function parseSpecialsFile(file: File): Promise<any[]> {
   return result;
 }
 
-// Builds { byItem: Record<itemNo, { special_CR, special_NR, special_WR }> }
-// Uses the Offer Name/Description suffix to detect region (e.g. "-WR", "-NR", "-CR")
+// Builds specials AND rrp maps from the Offers export file.
+// Special price: "Deal Price Value" or "Offer Price Including VAT"
+// RRP: "Standard Price Including VAT" — extracted from the same file
+// Region: OfferDescription suffix (-CR / -NR / -WR) or Price Group column
 export function buildSpecialsMap(rows: any[]): {
   byItem: Record<string, { special_CR?: string; special_NR?: string; special_WR?: string }>;
+  rrpByItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }>;
   count: number;
 } {
   const byItem: Record<string, { special_CR?: string; special_NR?: string; special_WR?: string }> = {};
+  const rrpByItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }> = {};
+
+  const norm = (s: string) => s.toLowerCase().replace(/[\s_\-\.]/g, '');
 
   for (const row of rows) {
     const keys = Object.keys(row);
-    const getVal = (...names: string[]) => {
-      const k = keys.find(k => names.some(n => k.toLowerCase().replace(/[\s_\-]/g, '').includes(n.toLowerCase().replace(/[\s_\-]/g, ''))));
-      return k ? String(row[k] ?? '').trim() : '';
+
+    const getValExact = (...names: string[]) => {
+      for (const n of names) {
+        const nn = norm(n);
+        const k = keys.find(k => norm(k) === nn);
+        if (k) return String(row[k] ?? '').trim();
+      }
+      // substring fallback — shortest match wins
+      for (const n of names) {
+        const nn = norm(n);
+        const matches = keys.filter(k => norm(k).includes(nn)).sort((a, b) => norm(a).length - norm(b).length);
+        if (matches.length) return String(row[matches[0]] ?? '').trim();
+      }
+      return '';
     };
 
-    const itemNo = getVal('no', 'itemno', 'itemnumber', 'item').replace(/\.0$/, '').trim();
-    // Deal Price is the actual special price to show; fall back to Offer Price
-    const dealPrice = getVal('dealprice', 'deal') || getVal('offerprice', 'offer');
-    // Region from offer name suffix: "EDLP CAMPAIGN 2026-WR" → WR
-    const offerName = getVal('offerdescription', 'offername', 'description').toUpperCase();
-    const priceGroup = getVal('pricegroup', 'priority', 'group').toUpperCase();
+    const itemNo = getValExact('No_', 'No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
+    if (!itemNo) continue;
 
-    if (!itemNo || !dealPrice) continue;
+    // Deal price: prefer "Deal Price Value", then "Offer Price Including VAT", then "Offer Price"
+    const dealPrice = getValExact('Deal Price Value', 'dealpricevalue')
+      || getValExact('Offer Price Including VAT', 'offerpriceincludingvat')
+      || getValExact('Offer Price', 'offerprice');
 
-    // Detect region from offer name suffix or price group
+    // RRP = standard shelf price before the deal
+    const stdPrice = getValExact('Standard Price Including VAT', 'standardpriceincludingvat')
+      || getValExact('Standard Price', 'standardprice');
+
+    // Region from offer description suffix, then Price Group
+    const offerDesc = getValExact('OfferDescription', 'offerdescription', 'offername').toUpperCase();
+    const priceGroup = getValExact('Price Group', 'pricegroup').toUpperCase().trim();
+
     let region = '';
-    if (/-NR\b/.test(offerName) || priceGroup === 'NR') region = 'NR';
-    else if (/-CR\b/.test(offerName) || priceGroup === 'CR') region = 'CR';
-    else if (/-WR\b/.test(offerName) || priceGroup === 'WR') region = 'WR';
+    if (/-NR\b/.test(offerDesc) || priceGroup === 'NR') region = 'NR';
+    else if (/-CR\b/.test(offerDesc) || priceGroup === 'CR') region = 'CR';
+    else if (/-WR\b/.test(offerDesc) || priceGroup === 'WR') region = 'WR';
 
     if (!region) continue;
 
-    if (!byItem[itemNo]) byItem[itemNo] = {};
-    if (region === 'CR' && !byItem[itemNo].special_CR) byItem[itemNo].special_CR = dealPrice;
-    else if (region === 'NR' && !byItem[itemNo].special_NR) byItem[itemNo].special_NR = dealPrice;
-    else if (region === 'WR' && !byItem[itemNo].special_WR) byItem[itemNo].special_WR = dealPrice;
+    // Store special price
+    if (dealPrice) {
+      if (!byItem[itemNo]) byItem[itemNo] = {};
+      if (region === 'CR' && !byItem[itemNo].special_CR) byItem[itemNo].special_CR = dealPrice;
+      else if (region === 'NR' && !byItem[itemNo].special_NR) byItem[itemNo].special_NR = dealPrice;
+      else if (region === 'WR' && !byItem[itemNo].special_WR) byItem[itemNo].special_WR = dealPrice;
+    }
+
+    // Store RRP (standard price) — take the first occurrence per item+region
+    if (stdPrice) {
+      if (!rrpByItem[itemNo]) rrpByItem[itemNo] = {};
+      if (region === 'CR' && !rrpByItem[itemNo].rrp_CR) rrpByItem[itemNo].rrp_CR = stdPrice;
+      else if (region === 'NR' && !rrpByItem[itemNo].rrp_NR) rrpByItem[itemNo].rrp_NR = stdPrice;
+      else if (region === 'WR' && !rrpByItem[itemNo].rrp_WR) rrpByItem[itemNo].rrp_WR = stdPrice;
+    }
   }
 
-  return { byItem, count: Object.keys(byItem).length };
+  return { byItem, rrpByItem, count: Object.keys(byItem).length };
 }
 
 export async function parseSohFile(file: File): Promise<any[]> {

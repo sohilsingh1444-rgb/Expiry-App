@@ -347,19 +347,34 @@ export default function AdminPage() {
     try {
       const rows = await parseSpecialsFile(file);
       if (!rows.length) { toast({ title: "Empty file", description: "No rows found.", variant: "destructive" }); return; }
-      const { byItem, count } = buildSpecialsMap(rows);
-      const res = await fetch(apiUrl("/admin/specials-data"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-password": pw },
-        body: JSON.stringify({ byItem, count }),
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const { byItem, rrpByItem, count } = buildSpecialsMap(rows);
+      const [specRes, rrpRes] = await Promise.all([
+        fetch(apiUrl("/admin/specials-data"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-admin-password": pw },
+          body: JSON.stringify({ byItem, count }),
+        }),
+        Object.keys(rrpByItem).length > 0
+          ? fetch(apiUrl("/admin/rrp-data"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "x-admin-password": pw },
+              body: JSON.stringify({ byItem: rrpByItem, count: Object.keys(rrpByItem).length }),
+            })
+          : Promise.resolve(null),
+      ]);
+      if (specRes.ok) {
+        const data = await specRes.json();
         setSpecialsMeta({ uploadedAt: data.uploadedAt, count: data.count });
-        toast({ title: "Specials Data uploaded", description: `${Number(data.count).toLocaleString()} items stored.` });
+        if (rrpRes?.ok) {
+          const rrpData = await rrpRes.json();
+          setRrpMeta({ uploadedAt: rrpData.uploadedAt, count: rrpData.count });
+          toast({ title: "Specials + RRP uploaded", description: `${Number(data.count).toLocaleString()} specials and ${Number(rrpData.count).toLocaleString()} RRP items stored.` });
+        } else {
+          toast({ title: "Specials Data uploaded", description: `${Number(data.count).toLocaleString()} items stored.` });
+        }
       } else {
-        const text = await res.text();
-        let errMsg = `Upload failed (${res.status})`;
+        const text = await specRes.text();
+        let errMsg = `Upload failed (${specRes.status})`;
         try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { /* non-JSON */ }
         toast({ title: "Upload failed", description: errMsg, variant: "destructive" });
       }
