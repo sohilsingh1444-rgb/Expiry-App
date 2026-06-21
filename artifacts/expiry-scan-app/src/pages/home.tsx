@@ -904,6 +904,12 @@ export default function Home() {
                           <div className="bg-white rounded-md border border-green-100 px-2 py-1.5">
                             <div className="text-xs text-zinc-500">Special</div>
                             <div className="font-bold text-green-700">${matchedItem.special}</div>
+                            {(matchedItem.special_start || matchedItem.special_end) && (
+                              <div className="text-xs text-zinc-400 mt-0.5 leading-tight">
+                                {matchedItem.special_start && <span>From {matchedItem.special_start}</span>}
+                                {matchedItem.special_end && <span className="block">To {matchedItem.special_end}</span>}
+                              </div>
+                            )}
                           </div>
                         )}
                         {matchedItem?.soh && (

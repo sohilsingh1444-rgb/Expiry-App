@@ -229,13 +229,29 @@ export async function parseSpecialsFile(file: File): Promise<any[]> {
 // Special price: "Deal Price Value" or "Offer Price Including VAT"
 // RRP: "Standard Price Including VAT" — extracted from the same file
 // Region: OfferDescription suffix (-CR / -NR / -WR) or Price Group column
+function parseDMY(s: any): Date | null {
+  if (!s && s !== 0) return null;
+  const str = String(s).trim();
+  if (!str || str.toUpperCase() === 'NULL') return null;
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(str);
+  if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function fmtDMY(d: Date | null): string | undefined {
+  if (!d) return undefined;
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
 export function buildSpecialsMap(rows: any[]): {
-  byItem: Record<string, { special_CR?: string; special_NR?: string; special_WR?: string }>;
+  byItem: Record<string, { special_CR?: string; special_CR_start?: string; special_CR_end?: string; special_NR?: string; special_NR_start?: string; special_NR_end?: string; special_WR?: string; special_WR_start?: string; special_WR_end?: string }>;
   rrpByItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }>;
   count: number;
 } {
-  const byItem: Record<string, { special_CR?: string; special_NR?: string; special_WR?: string }> = {};
+  const byItem: Record<string, { special_CR?: string; special_CR_start?: string; special_CR_end?: string; special_NR?: string; special_NR_start?: string; special_NR_end?: string; special_WR?: string; special_WR_start?: string; special_WR_end?: string }> = {};
   const rrpByItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }> = {};
+  const today = new Date(); today.setHours(0, 0, 0, 0);
 
   const norm = (s: string) => s.toLowerCase().replace(/[\s_\-\.]/g, '');
 
@@ -260,10 +276,18 @@ export function buildSpecialsMap(rows: any[]): {
     const itemNo = getValExact('No_', 'No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
     if (!itemNo) continue;
 
-    // Deal price: try all known column name variants
-    const dealPrice = getValExact('Deal Price Value', 'dealpricevalue')
+    // Parse and check date range — skip expired rows
+    const startDate = parseDMY(getValExact('Starting Date', 'startingdate', 'startdate'));
+    const endDate = parseDMY(getValExact('Ending Date', 'endingdate', 'enddate'));
+    if (endDate && endDate < today) continue;  // expired — skip
+
+    const startStr = fmtDMY(startDate);
+    const endStr = fmtDMY(endDate);
+
+    // Deal price: use "Offer Price Including VAT" as primary (user confirmed), fallbacks for other formats
+    const dealPrice = getValExact('Offer Price Including VAT', 'offerpriceincludingvat')
+      || getValExact('Deal Price Value', 'dealpricevalue')
       || getValExact('Deal Price_Disc_ _', 'dealpricedisc')
-      || getValExact('Offer Price Including VAT', 'offerpriceincludingvat')
       || getValExact('Offer Price', 'offerprice')
       || getValExact('Deal Price', 'dealprice');
 
@@ -277,19 +301,26 @@ export function buildSpecialsMap(rows: any[]): {
     const variantCode = getValExact('Variant Code', 'variantcode').toUpperCase().trim();
 
     let region = '';
-    // Check hyphen-suffix first (-NR, -CR, -WR, -W = Western), then standalone word, then price group/variant code
     if (/-NR\b/.test(offerDesc) || /\bNR\b/.test(offerDesc) || priceGroup === 'NR' || variantCode === 'NR') region = 'NR';
     else if (/-CR\b/.test(offerDesc) || /\bCR\b/.test(offerDesc) || priceGroup === 'CR' || variantCode === 'CR') region = 'CR';
     else if (/-WR\b/.test(offerDesc) || /-W\b/.test(offerDesc) || /\bWR\b/.test(offerDesc) || priceGroup === 'WR' || variantCode === 'WR') region = 'WR';
 
     if (!region) continue;
 
-    // Store special price
-    if (dealPrice) {
+    // Store special price — take lowest price per item+region
+    if (dealPrice && !isNaN(parseFloat(dealPrice))) {
+      const newPrice = parseFloat(dealPrice);
       if (!byItem[itemNo]) byItem[itemNo] = {};
-      if (region === 'CR' && !byItem[itemNo].special_CR) byItem[itemNo].special_CR = dealPrice;
-      else if (region === 'NR' && !byItem[itemNo].special_NR) byItem[itemNo].special_NR = dealPrice;
-      else if (region === 'WR' && !byItem[itemNo].special_WR) byItem[itemNo].special_WR = dealPrice;
+      if (region === 'CR') {
+        const cur = byItem[itemNo].special_CR ? parseFloat(byItem[itemNo].special_CR!) : Infinity;
+        if (newPrice < cur) { byItem[itemNo].special_CR = dealPrice; byItem[itemNo].special_CR_start = startStr; byItem[itemNo].special_CR_end = endStr; }
+      } else if (region === 'NR') {
+        const cur = byItem[itemNo].special_NR ? parseFloat(byItem[itemNo].special_NR!) : Infinity;
+        if (newPrice < cur) { byItem[itemNo].special_NR = dealPrice; byItem[itemNo].special_NR_start = startStr; byItem[itemNo].special_NR_end = endStr; }
+      } else if (region === 'WR') {
+        const cur = byItem[itemNo].special_WR ? parseFloat(byItem[itemNo].special_WR!) : Infinity;
+        if (newPrice < cur) { byItem[itemNo].special_WR = dealPrice; byItem[itemNo].special_WR_start = startStr; byItem[itemNo].special_WR_end = endStr; }
+      }
     }
 
     // Store RRP (standard price) — take the first occurrence per item+region

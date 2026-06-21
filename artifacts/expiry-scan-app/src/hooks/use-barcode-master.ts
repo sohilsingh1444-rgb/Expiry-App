@@ -7,12 +7,20 @@ export type BarcodeMasterRow = {
   description: string;
   rrp?: string;
   special?: string;
+  special_start?: string;
+  special_end?: string;
   rrp_CRWR?: string;
   special_CRWR?: string;
+  special_CRWR_start?: string;
+  special_CRWR_end?: string;
   rrp_NR?: string;
   special_NR?: string;
+  special_NR_start?: string;
+  special_NR_end?: string;
   rrp_WR?: string;
   special_WR?: string;
+  special_WR_start?: string;
+  special_WR_end?: string;
   soh?: string;
 };
 
@@ -103,17 +111,36 @@ export function mergeRrpIntoMap(
   }
 }
 
+export type SpecialsPricing = {
+  special_CR?: string; special_CR_start?: string; special_CR_end?: string;
+  special_NR?: string; special_NR_start?: string; special_NR_end?: string;
+  special_WR?: string; special_WR_start?: string; special_WR_end?: string;
+};
+
 // Merge Specials pricing (from dedicated Specials file) into the barcode map in-place
 export function mergeSpecialsIntoMap(
   map: Map<string, BarcodeMasterRow>,
-  specialsByItem: Record<string, { special_CR?: string; special_NR?: string; special_WR?: string }>
+  specialsByItem: Record<string, SpecialsPricing>
 ) {
   for (const row of map.values()) {
     const pricing = specialsByItem[row.itemNumber];
     if (!pricing) continue;
-    if (pricing.special_CR) { row.special_CRWR = pricing.special_CR; if (!row.special) row.special = pricing.special_CR; }
-    if (pricing.special_NR) row.special_NR = pricing.special_NR;
-    if (pricing.special_WR) row.special_WR = pricing.special_WR;
+    if (pricing.special_CR) {
+      row.special_CRWR = pricing.special_CR;
+      row.special_CRWR_start = pricing.special_CR_start;
+      row.special_CRWR_end = pricing.special_CR_end;
+      if (!row.special) row.special = pricing.special_CR;
+    }
+    if (pricing.special_NR) {
+      row.special_NR = pricing.special_NR;
+      row.special_NR_start = pricing.special_NR_start;
+      row.special_NR_end = pricing.special_NR_end;
+    }
+    if (pricing.special_WR) {
+      row.special_WR = pricing.special_WR;
+      row.special_WR_start = pricing.special_WR_start;
+      row.special_WR_end = pricing.special_WR_end;
+    }
   }
 }
 
@@ -222,7 +249,7 @@ export function useBarcodeMaster() {
     setRrpCount(Object.keys(rrpByItem).length);
   }, []);
 
-  const saveSpecialsData = useCallback((specialsByItem: Record<string, { special_CR?: string; special_NR?: string; special_WR?: string }>) => {
+  const saveSpecialsData = useCallback((specialsByItem: Record<string, SpecialsPricing>) => {
     setMasterData(prev => {
       const next = new Map(prev);
       mergeSpecialsIntoMap(next, specialsByItem);
@@ -258,6 +285,8 @@ export function useBarcodeMaster() {
         ...row,
         rrp: isNR ? (row.rrp_NR || row.rrp) : isWR ? (row.rrp_WR || row.rrp) : (row.rrp_CRWR || row.rrp),
         special: isNR ? (row.special_NR || row.special) : isWR ? (row.special_WR || row.special) : (row.special_CRWR || row.special),
+        special_start: isNR ? (row.special_NR_start || row.special_CRWR_start) : isWR ? (row.special_WR_start || row.special_CRWR_start) : row.special_CRWR_start,
+        special_end: isNR ? (row.special_NR_end || row.special_CRWR_end) : isWR ? (row.special_WR_end || row.special_CRWR_end) : row.special_CRWR_end,
       };
     }
     return row;
