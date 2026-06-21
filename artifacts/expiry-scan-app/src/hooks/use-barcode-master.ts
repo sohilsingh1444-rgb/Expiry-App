@@ -11,6 +11,8 @@ export type BarcodeMasterRow = {
   special_CRWR?: string;
   rrp_NR?: string;
   special_NR?: string;
+  rrp_WR?: string;
+  special_WR?: string;
   soh?: string;
 };
 
@@ -42,7 +44,6 @@ export function buildBarcodeMaps(rows: any[]): {
     const soh = getVal('soh', 'stockonhand', 'stock', 'onhand');
 
     // Match any column whose stripped name both contains a region suffix AND a field keyword.
-    // This handles variants like rrp_nr, rrp2_nr, nr_rrp2, special3_nr, etc.
     const findRegionCol = (region: string, ...fieldParts: string[]): string => {
       const r = region.replace(/[\s_\-]/g, '').toLowerCase();
       const key = keys.find(k => {
@@ -88,6 +89,34 @@ export function buildBarcodeMaps(rows: any[]): {
   return { map, byItem, count: Math.max(Object.keys(map).length, Object.keys(byItem).length) };
 }
 
+// Merge RRP pricing (from dedicated RRP file) into the barcode map in-place
+export function mergeRrpIntoMap(
+  map: Map<string, BarcodeMasterRow>,
+  rrpByItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }>
+) {
+  for (const row of map.values()) {
+    const pricing = rrpByItem[row.itemNumber];
+    if (!pricing) continue;
+    if (pricing.rrp_CR) { row.rrp_CRWR = pricing.rrp_CR; if (!row.rrp) row.rrp = pricing.rrp_CR; }
+    if (pricing.rrp_NR) row.rrp_NR = pricing.rrp_NR;
+    if (pricing.rrp_WR) row.rrp_WR = pricing.rrp_WR;
+  }
+}
+
+// Merge Specials pricing (from dedicated Specials file) into the barcode map in-place
+export function mergeSpecialsIntoMap(
+  map: Map<string, BarcodeMasterRow>,
+  specialsByItem: Record<string, { special_CR?: string; special_NR?: string; special_WR?: string }>
+) {
+  for (const row of map.values()) {
+    const pricing = specialsByItem[row.itemNumber];
+    if (!pricing) continue;
+    if (pricing.special_CR) { row.special_CRWR = pricing.special_CR; if (!row.special) row.special = pricing.special_CR; }
+    if (pricing.special_NR) row.special_NR = pricing.special_NR;
+    if (pricing.special_WR) row.special_WR = pricing.special_WR;
+  }
+}
+
 export function useBarcodeMaster() {
   const [masterData, setMasterData] = useState<Map<string, BarcodeMasterRow>>(new Map());
   const [masterByItem, setMasterByItem] = useState<Map<string, BarcodeMasterRow>>(new Map());
@@ -96,25 +125,63 @@ export function useBarcodeMaster() {
   useEffect(() => {
     async function init() {
       try {
-        const metaRes = await fetch(`${getApiBase()}/api/barcode-master/meta`);
+        const [metaRes, rrpMetaRes, specialsMetaRes] = await Promise.all([
+          fetch(`${getApiBase()}/api/barcode-master/meta`),
+          fetch(`${getApiBase()}/api/rrp-data/meta`),
+          fetch(`${getApiBase()}/api/specials-data/meta`),
+        ]);
+
+        const hasBm = metaRes.ok && (() => {
+          const m = metaRes.json(); return m;
+        });
+
+        // Fetch barcode master if available
+        let map = new Map<string, BarcodeMasterRow>();
         if (metaRes.ok) {
           const meta: { uploadedAt: string | null; count: number } = await metaRes.json();
           if (meta.uploadedAt && meta.count > 0) {
             const dataRes = await fetch(`${getApiBase()}/api/barcode-master`);
             if (dataRes.ok) {
               const data: { map: Record<string, BarcodeMasterRow> } = await dataRes.json();
-              setMasterData(new Map(Object.entries(data.map)));
-              // Rebuild byItem client-side (server no longer sends it to halve payload size)
-              const byItem = new Map<string, BarcodeMasterRow>();
-              for (const row of Object.values(data.map)) {
-                if (row.itemNumber && (!byItem.has(row.itemNumber) || (row.rrp && !byItem.get(row.itemNumber)!.rrp))) {
-                  byItem.set(row.itemNumber, row);
-                }
-              }
-              setMasterByItem(byItem);
+              map = new Map(Object.entries(data.map));
             }
           }
         }
+
+        // Fetch and merge RRP data if available
+        if (rrpMetaRes.ok) {
+          const rrpMeta: { uploadedAt: string | null; count: number } = await rrpMetaRes.json();
+          if (rrpMeta.uploadedAt && rrpMeta.count > 0) {
+            const rrpRes = await fetch(`${getApiBase()}/api/rrp-data`);
+            if (rrpRes.ok) {
+              const rrpData: { byItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }> } = await rrpRes.json();
+              mergeRrpIntoMap(map, rrpData.byItem);
+            }
+          }
+        }
+
+        // Fetch and merge Specials data if available
+        if (specialsMetaRes.ok) {
+          const specMeta: { uploadedAt: string | null; count: number } = await specialsMetaRes.json();
+          if (specMeta.uploadedAt && specMeta.count > 0) {
+            const specRes = await fetch(`${getApiBase()}/api/specials-data`);
+            if (specRes.ok) {
+              const specData: { byItem: Record<string, { special_CR?: string; special_NR?: string; special_WR?: string }> } = await specRes.json();
+              mergeSpecialsIntoMap(map, specData.byItem);
+            }
+          }
+        }
+
+        // Build byItem index
+        const byItem = new Map<string, BarcodeMasterRow>();
+        for (const row of map.values()) {
+          if (row.itemNumber && (!byItem.has(row.itemNumber) || (row.rrp && !byItem.get(row.itemNumber)!.rrp))) {
+            byItem.set(row.itemNumber, row);
+          }
+        }
+
+        setMasterData(map);
+        setMasterByItem(byItem);
       } catch {
         // API unavailable
       }
@@ -152,11 +219,13 @@ export function useBarcodeMaster() {
     if (!row) return undefined;
 
     if (region) {
-      const isNR = region.toUpperCase() === 'NR';
+      const r = region.toUpperCase();
+      const isNR = r === 'NR';
+      const isWR = r === 'WR';
       return {
         ...row,
-        rrp: isNR ? (row.rrp_NR || row.rrp) : (row.rrp_CRWR || row.rrp),
-        special: isNR ? (row.special_NR || row.special) : (row.special_CRWR || row.special),
+        rrp: isNR ? (row.rrp_NR || row.rrp) : isWR ? (row.rrp_WR || row.rrp) : (row.rrp_CRWR || row.rrp),
+        special: isNR ? (row.special_NR || row.special) : isWR ? (row.special_WR || row.special) : (row.special_CRWR || row.special),
       };
     }
     return row;

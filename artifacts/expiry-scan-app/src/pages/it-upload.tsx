@@ -1,13 +1,14 @@
 import { useState, useRef } from "react";
-import { parseBarcodeMaster, parseSohFile } from "@/lib/xlsx";
+import { parseBarcodeMaster, parseRrpFile, parseSpecialsFile, parseSohFile } from "@/lib/xlsx";
 import { buildBarcodeMaps } from "@/hooks/use-barcode-master";
+import { buildRrpMap, buildSpecialsMap } from "@/lib/xlsx";
 import { buildSohMaps } from "@/hooks/use-soh-data";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { FileSpreadsheet, Database, Upload, LogOut, ShieldCheck } from "lucide-react";
+import { FileSpreadsheet, Tag, Percent, Database, Upload, LogOut, ShieldCheck } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { getApiBase } from "@/lib/api-base";
 
@@ -26,9 +27,15 @@ export default function ItUploadPage() {
 
   const [bmMeta, setBmMeta] = useState<MasterMeta>({ uploadedAt: null, count: 0 });
   const [bmUploading, setBmUploading] = useState(false);
+  const [rrpMeta, setRrpMeta] = useState<MasterMeta>({ uploadedAt: null, count: 0 });
+  const [rrpUploading, setRrpUploading] = useState(false);
+  const [specialsMeta, setSpecialsMeta] = useState<MasterMeta>({ uploadedAt: null, count: 0 });
+  const [specialsUploading, setSpecialsUploading] = useState(false);
   const [sohMeta, setSohMeta] = useState<MasterMeta>({ uploadedAt: null, count: 0 });
   const [sohUploading, setSohUploading] = useState(false);
   const bmFileRef = useRef<HTMLInputElement>(null);
+  const rrpFileRef = useRef<HTMLInputElement>(null);
+  const specialsFileRef = useRef<HTMLInputElement>(null);
   const sohFileRef = useRef<HTMLInputElement>(null);
 
   const storedPassword = () => sessionStorage.getItem("it_pw") ?? "";
@@ -59,11 +66,15 @@ export default function ItUploadPage() {
   }
 
   async function loadMeta() {
-    const [bmRes, sohRes] = await Promise.all([
+    const [bmRes, rrpRes, specRes, sohRes] = await Promise.all([
       fetch(apiUrl("/barcode-master/meta")),
+      fetch(apiUrl("/rrp-data/meta")),
+      fetch(apiUrl("/specials-data/meta")),
       fetch(apiUrl("/soh-data/meta")),
     ]);
     if (bmRes.ok) setBmMeta(await bmRes.json());
+    if (rrpRes.ok) setRrpMeta(await rrpRes.json());
+    if (specRes.ok) setSpecialsMeta(await specRes.json());
     if (sohRes.ok) setSohMeta(await sohRes.json());
   }
 
@@ -133,6 +144,78 @@ export default function ItUploadPage() {
       toast({ title: "Upload error", description: err instanceof Error ? err.message : "Failed to read or upload file.", variant: "destructive" });
     } finally {
       setBmUploading(false);
+    }
+  }
+
+  async function handleRrpUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const pw = storedPassword();
+    setRrpUploading(true);
+    try {
+      const rows = await parseRrpFile(file);
+      if (!rows.length) {
+        toast({ title: "Empty file", description: "No rows found in the file.", variant: "destructive" });
+        return;
+      }
+      const { byItem, count } = buildRrpMap(rows);
+      const res = await fetch(apiUrl("/admin/rrp-data"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pw },
+        body: JSON.stringify({ byItem, count }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRrpMeta({ uploadedAt: data.uploadedAt, count: data.count });
+        toast({ title: "RRP Data uploaded", description: `${Number(data.count).toLocaleString()} items stored.` });
+      } else {
+        const text = await res.text();
+        let errMsg = `Upload failed (${res.status})`;
+        if (res.status === 413) errMsg = "File is too large. Try exporting only essential columns.";
+        else { try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { /* non-JSON */ } }
+        toast({ title: "Upload failed", description: errMsg, variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Upload error", description: err instanceof Error ? err.message : "Failed to read or upload file.", variant: "destructive" });
+    } finally {
+      setRrpUploading(false);
+    }
+  }
+
+  async function handleSpecialsUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const pw = storedPassword();
+    setSpecialsUploading(true);
+    try {
+      const rows = await parseSpecialsFile(file);
+      if (!rows.length) {
+        toast({ title: "Empty file", description: "No rows found in the file.", variant: "destructive" });
+        return;
+      }
+      const { byItem, count } = buildSpecialsMap(rows);
+      const res = await fetch(apiUrl("/admin/specials-data"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pw },
+        body: JSON.stringify({ byItem, count }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSpecialsMeta({ uploadedAt: data.uploadedAt, count: data.count });
+        toast({ title: "Specials Data uploaded", description: `${Number(data.count).toLocaleString()} items stored.` });
+      } else {
+        const text = await res.text();
+        let errMsg = `Upload failed (${res.status})`;
+        if (res.status === 413) errMsg = "File is too large. Try exporting only essential columns.";
+        else { try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { /* non-JSON */ } }
+        toast({ title: "Upload failed", description: errMsg, variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Upload error", description: err instanceof Error ? err.message : "Failed to read or upload file.", variant: "destructive" });
+    } finally {
+      setSpecialsUploading(false);
     }
   }
 
@@ -225,21 +308,22 @@ export default function ItUploadPage() {
           Upload the latest files below. All store devices will automatically load the new data on their next page open.
         </p>
 
-        {/* Barcode Master */}
+        {/* 1. Items / Barcode Master */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <FileSpreadsheet className="w-4 h-4" />
-              Barcode Master Data
+              <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+              Items File (Barcode Master)
             </CardTitle>
+            <CardDescription className="text-xs text-gray-500">Barcode → item number → description lookup</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {bmMeta.count > 0 ? (
+            {bmMeta.count > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Current items</span>
                 <span className="font-medium">{bmMeta.count.toLocaleString()}</span>
               </div>
-            ) : null}
+            )}
             {bmMeta.uploadedAt ? (
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Last uploaded</span>
@@ -249,32 +333,93 @@ export default function ItUploadPage() {
               <p className="text-sm text-amber-600">No file uploaded yet.</p>
             )}
             <input ref={bmFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleBarcodeMasterUpload} />
-            <Button
-              className="w-full gap-2"
-              onClick={() => bmFileRef.current?.click()}
-              disabled={bmUploading}
-            >
+            <Button className="w-full gap-2" onClick={() => bmFileRef.current?.click()} disabled={bmUploading}>
               <Upload className="w-4 h-4" />
               {bmUploading ? "Uploading…" : bmMeta.count > 0 ? "Replace file" : "Upload file"}
             </Button>
           </CardContent>
         </Card>
 
-        {/* SOH Data */}
+        {/* 2. RRP Data */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Tag className="w-4 h-4 text-emerald-600" />
+              RRP Data
+            </CardTitle>
+            <CardDescription className="text-xs text-gray-500">Retail prices by region (CR / NR / WR) — Customer Price Group file</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {rrpMeta.count > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Current items</span>
+                <span className="font-medium">{rrpMeta.count.toLocaleString()}</span>
+              </div>
+            )}
+            {rrpMeta.uploadedAt ? (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Last uploaded</span>
+                <span className="text-gray-700">{format(parseISO(rrpMeta.uploadedAt), "d MMM yyyy, h:mm a")}</span>
+              </div>
+            ) : (
+              <p className="text-sm text-amber-600">No file uploaded yet.</p>
+            )}
+            <input ref={rrpFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleRrpUpload} />
+            <Button className="w-full gap-2" onClick={() => rrpFileRef.current?.click()} disabled={rrpUploading}>
+              <Upload className="w-4 h-4" />
+              {rrpUploading ? "Uploading…" : rrpMeta.count > 0 ? "Replace file" : "Upload file"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* 3. Specials Data */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Percent className="w-4 h-4 text-orange-500" />
+              Specials / Offers Data
+            </CardTitle>
+            <CardDescription className="text-xs text-gray-500">Deal prices by region from the Offers export (suffix -CR / -NR / -WR)</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {specialsMeta.count > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Current items</span>
+                <span className="font-medium">{specialsMeta.count.toLocaleString()}</span>
+              </div>
+            )}
+            {specialsMeta.uploadedAt ? (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Last uploaded</span>
+                <span className="text-gray-700">{format(parseISO(specialsMeta.uploadedAt), "d MMM yyyy, h:mm a")}</span>
+              </div>
+            ) : (
+              <p className="text-sm text-amber-600">No file uploaded yet.</p>
+            )}
+            <input ref={specialsFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleSpecialsUpload} />
+            <Button className="w-full gap-2" onClick={() => specialsFileRef.current?.click()} disabled={specialsUploading}>
+              <Upload className="w-4 h-4" />
+              {specialsUploading ? "Uploading…" : specialsMeta.count > 0 ? "Replace file" : "Upload file"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* 4. SOH Data */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Database className="w-4 h-4 text-purple-500" />
               System SOH Data
             </CardTitle>
+            <CardDescription className="text-xs text-gray-500">Stock on hand quantities by store</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {sohMeta.count > 0 ? (
+            {sohMeta.count > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Current items</span>
                 <span className="font-medium">{sohMeta.count.toLocaleString()}</span>
               </div>
-            ) : null}
+            )}
             {sohMeta.uploadedAt ? (
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Last uploaded</span>
@@ -284,11 +429,7 @@ export default function ItUploadPage() {
               <p className="text-sm text-amber-600">No file uploaded yet.</p>
             )}
             <input ref={sohFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleSohUpload} />
-            <Button
-              className="w-full gap-2"
-              onClick={() => sohFileRef.current?.click()}
-              disabled={sohUploading}
-            >
+            <Button className="w-full gap-2" onClick={() => sohFileRef.current?.click()} disabled={sohUploading}>
               <Upload className="w-4 h-4" />
               {sohUploading ? "Uploading…" : sohMeta.count > 0 ? "Replace file" : "Upload file"}
             </Button>

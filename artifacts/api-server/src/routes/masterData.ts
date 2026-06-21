@@ -111,6 +111,100 @@ router.delete("/admin/barcode-master", async (req, res): Promise<void> => {
   res.json({ ok: true });
 });
 
+// ── RRP Data ──────────────────────────────────────────────────────────────────
+
+router.get("/rrp-data/meta", async (_req, res): Promise<void> => {
+  const uploadedAt = await getSetting("rrp_uploaded_at");
+  const count = await getSetting("rrp_count");
+  res.json({ uploadedAt: uploadedAt ?? null, count: count ? Number(count) : 0 });
+});
+
+router.get("/rrp-data", async (_req, res): Promise<void> => {
+  const byItemJson = await getSetting("rrp_by_item_json");
+  const uploadedAt = await getSetting("rrp_uploaded_at");
+  const count = await getSetting("rrp_count");
+  const payload = JSON.stringify({
+    byItem: byItemJson ? JSON.parse(byItemJson) : {},
+    uploadedAt: uploadedAt ?? null,
+    count: count ? Number(count) : 0,
+  });
+  const compressed = gzipSync(Buffer.from(payload), { level: 9 });
+  res.setHeader("Content-Encoding", "gzip");
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Vary", "Accept-Encoding");
+  res.send(compressed);
+});
+
+router.post("/admin/rrp-data", async (req, res): Promise<void> => {
+  if (!checkAdminPassword(req, res)) return;
+  const { byItem, count } = req.body as { byItem?: Record<string, unknown>; count?: number };
+  if (!byItem || Object.keys(byItem).length === 0) {
+    res.status(400).json({ error: "byItem is required" });
+    return;
+  }
+  const now = new Date().toISOString();
+  const itemCount = count ?? Object.keys(byItem).length;
+  await setSetting("rrp_by_item_json", JSON.stringify(byItem));
+  await setSetting("rrp_uploaded_at", now);
+  await setSetting("rrp_count", String(itemCount));
+  res.json({ ok: true, uploadedAt: now, count: itemCount });
+});
+
+router.delete("/admin/rrp-data", async (req, res): Promise<void> => {
+  if (!checkAdminPassword(req, res)) return;
+  for (const key of ["rrp_by_item_json", "rrp_uploaded_at", "rrp_count"]) {
+    await db.delete(appSettingsTable).where(eq(appSettingsTable.key, key));
+  }
+  res.json({ ok: true });
+});
+
+// ── Specials Data ─────────────────────────────────────────────────────────────
+
+router.get("/specials-data/meta", async (_req, res): Promise<void> => {
+  const uploadedAt = await getSetting("specials_uploaded_at");
+  const count = await getSetting("specials_count");
+  res.json({ uploadedAt: uploadedAt ?? null, count: count ? Number(count) : 0 });
+});
+
+router.get("/specials-data", async (_req, res): Promise<void> => {
+  const byItemJson = await getSetting("specials_by_item_json");
+  const uploadedAt = await getSetting("specials_uploaded_at");
+  const count = await getSetting("specials_count");
+  const payload = JSON.stringify({
+    byItem: byItemJson ? JSON.parse(byItemJson) : {},
+    uploadedAt: uploadedAt ?? null,
+    count: count ? Number(count) : 0,
+  });
+  const compressed = gzipSync(Buffer.from(payload), { level: 9 });
+  res.setHeader("Content-Encoding", "gzip");
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Vary", "Accept-Encoding");
+  res.send(compressed);
+});
+
+router.post("/admin/specials-data", async (req, res): Promise<void> => {
+  if (!checkAdminPassword(req, res)) return;
+  const { byItem, count } = req.body as { byItem?: Record<string, unknown>; count?: number };
+  if (!byItem || Object.keys(byItem).length === 0) {
+    res.status(400).json({ error: "byItem is required" });
+    return;
+  }
+  const now = new Date().toISOString();
+  const itemCount = count ?? Object.keys(byItem).length;
+  await setSetting("specials_by_item_json", JSON.stringify(byItem));
+  await setSetting("specials_uploaded_at", now);
+  await setSetting("specials_count", String(itemCount));
+  res.json({ ok: true, uploadedAt: now, count: itemCount });
+});
+
+router.delete("/admin/specials-data", async (req, res): Promise<void> => {
+  if (!checkAdminPassword(req, res)) return;
+  for (const key of ["specials_by_item_json", "specials_uploaded_at", "specials_count"]) {
+    await db.delete(appSettingsTable).where(eq(appSettingsTable.key, key));
+  }
+  res.json({ ok: true });
+});
+
 // ── SOH Data ──────────────────────────────────────────────────────────────────
 
 router.get("/soh-data/meta", async (_req, res): Promise<void> => {

@@ -122,6 +122,115 @@ export async function parseBarcodeMaster(file: File): Promise<any[]> {
   return result;
 }
 
+// ── RRP file parser ────────────────────────────────────────────────────────
+// Expected columns: Sales Type, Sales Code (region: CR/NR/WR), Item No.,
+// Item Description, Unit of Measure Code, Unit Price Including VAT,
+// Starting Date, Ending Date
+export async function parseRrpFile(file: File): Promise<any[]> {
+  const aoa = await readWorksheetAsAoa(file);
+  if (aoa.length < 2) return [];
+  const headers = aoa[0].map((c: any) => String(c ?? '').trim());
+  const result: any[] = [];
+  for (let r = 1; r < aoa.length; r++) {
+    const row = aoa[r];
+    if (!row || row.every((c: any) => c === '' || c == null)) continue;
+    const obj: any = {};
+    headers.forEach((h, c) => { if (h) obj[h] = row[c] ?? ''; });
+    result.push(obj);
+  }
+  return result;
+}
+
+// Builds { byItem: Record<itemNo, { rrp_CR, rrp_NR, rrp_WR }> }
+export function buildRrpMap(rows: any[]): {
+  byItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }>;
+  count: number;
+} {
+  const byItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }> = {};
+
+  for (const row of rows) {
+    const keys = Object.keys(row);
+    const getVal = (...names: string[]) => {
+      const k = keys.find(k => names.some(n => k.toLowerCase().replace(/[\s_\-]/g, '').includes(n.toLowerCase().replace(/[\s_\-]/g, ''))));
+      return k ? String(row[k] ?? '').trim() : '';
+    };
+
+    const salesCode = getVal('salescode', 'code', 'region').toUpperCase();
+    const itemNo = getVal('itemno', 'itemnumber', 'item').replace(/\.0$/, '').trim();
+    const price = getVal('unitprice', 'price', 'rrp', 'unitpriceincludingvat');
+
+    if (!itemNo || !price || !salesCode) continue;
+
+    if (!byItem[itemNo]) byItem[itemNo] = {};
+    if (salesCode === 'CR') byItem[itemNo].rrp_CR = price;
+    else if (salesCode === 'NR') byItem[itemNo].rrp_NR = price;
+    else if (salesCode === 'WR') byItem[itemNo].rrp_WR = price;
+  }
+
+  return { byItem, count: Object.keys(byItem).length };
+}
+
+// ── Specials file parser ───────────────────────────────────────────────────
+// Expected columns: Offer No., Status, OfferDescription, Starting Date,
+// Ending Date, Line No., Offer Type, No. (item), Variant Code, Description,
+// Standard Price Including VAT, Standard Price, Deal Price, Disc., Price Group,
+// Priority, Unit of Measure, Disc. Type, Discount Amount, Offer Price, etc.
+export async function parseSpecialsFile(file: File): Promise<any[]> {
+  const aoa = await readWorksheetAsAoa(file);
+  if (aoa.length < 2) return [];
+  const headers = aoa[0].map((c: any) => String(c ?? '').trim());
+  const result: any[] = [];
+  for (let r = 1; r < aoa.length; r++) {
+    const row = aoa[r];
+    if (!row || row.every((c: any) => c === '' || c == null)) continue;
+    const obj: any = {};
+    headers.forEach((h, c) => { if (h) obj[h] = row[c] ?? ''; });
+    result.push(obj);
+  }
+  return result;
+}
+
+// Builds { byItem: Record<itemNo, { special_CR, special_NR, special_WR }> }
+// Uses the Offer Name/Description suffix to detect region (e.g. "-WR", "-NR", "-CR")
+export function buildSpecialsMap(rows: any[]): {
+  byItem: Record<string, { special_CR?: string; special_NR?: string; special_WR?: string }>;
+  count: number;
+} {
+  const byItem: Record<string, { special_CR?: string; special_NR?: string; special_WR?: string }> = {};
+
+  for (const row of rows) {
+    const keys = Object.keys(row);
+    const getVal = (...names: string[]) => {
+      const k = keys.find(k => names.some(n => k.toLowerCase().replace(/[\s_\-]/g, '').includes(n.toLowerCase().replace(/[\s_\-]/g, ''))));
+      return k ? String(row[k] ?? '').trim() : '';
+    };
+
+    const itemNo = getVal('no', 'itemno', 'itemnumber', 'item').replace(/\.0$/, '').trim();
+    // Deal Price is the actual special price to show; fall back to Offer Price
+    const dealPrice = getVal('dealprice', 'deal') || getVal('offerprice', 'offer');
+    // Region from offer name suffix: "EDLP CAMPAIGN 2026-WR" → WR
+    const offerName = getVal('offerdescription', 'offername', 'description').toUpperCase();
+    const priceGroup = getVal('pricegroup', 'priority', 'group').toUpperCase();
+
+    if (!itemNo || !dealPrice) continue;
+
+    // Detect region from offer name suffix or price group
+    let region = '';
+    if (/-NR\b/.test(offerName) || priceGroup === 'NR') region = 'NR';
+    else if (/-CR\b/.test(offerName) || priceGroup === 'CR') region = 'CR';
+    else if (/-WR\b/.test(offerName) || priceGroup === 'WR') region = 'WR';
+
+    if (!region) continue;
+
+    if (!byItem[itemNo]) byItem[itemNo] = {};
+    if (region === 'CR' && !byItem[itemNo].special_CR) byItem[itemNo].special_CR = dealPrice;
+    else if (region === 'NR' && !byItem[itemNo].special_NR) byItem[itemNo].special_NR = dealPrice;
+    else if (region === 'WR' && !byItem[itemNo].special_WR) byItem[itemNo].special_WR = dealPrice;
+  }
+
+  return { byItem, count: Object.keys(byItem).length };
+}
+
 export async function parseSohFile(file: File): Promise<any[]> {
   const aoa = await readWorksheetAsAoa(file);
   if (aoa.length < 2) return [];

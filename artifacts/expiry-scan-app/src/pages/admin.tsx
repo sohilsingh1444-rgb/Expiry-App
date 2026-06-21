@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { parseBarcodeMaster, parseSohFile } from "@/lib/xlsx";
+import { parseBarcodeMaster, parseRrpFile, parseSpecialsFile, parseSohFile } from "@/lib/xlsx";
+import { buildRrpMap, buildSpecialsMap } from "@/lib/xlsx";
 import { buildBarcodeMaps } from "@/hooks/use-barcode-master";
 import { buildSohMaps } from "@/hooks/use-soh-data";
 import { useToast } from "@/hooks/use-toast";
@@ -85,9 +86,15 @@ export default function AdminPage() {
   type MasterMeta = { uploadedAt: string | null; count: number };
   const [bmMeta, setBmMeta] = useState<MasterMeta>({ uploadedAt: null, count: 0 });
   const [bmUploading, setBmUploading] = useState(false);
+  const [rrpMeta, setRrpMeta] = useState<MasterMeta>({ uploadedAt: null, count: 0 });
+  const [rrpUploading, setRrpUploading] = useState(false);
+  const [specialsMeta, setSpecialsMeta] = useState<MasterMeta>({ uploadedAt: null, count: 0 });
+  const [specialsUploading, setSpecialsUploading] = useState(false);
   const [sohMeta, setSohMeta] = useState<MasterMeta>({ uploadedAt: null, count: 0 });
   const [sohUploading, setSohUploading] = useState(false);
   const bmFileRef = useRef<HTMLInputElement>(null);
+  const rrpFileRef = useRef<HTMLInputElement>(null);
+  const specialsFileRef = useRef<HTMLInputElement>(null);
   const sohFileRef = useRef<HTMLInputElement>(null);
   const [storeCode, setStoreCode] = useState("");
   const [storeName, setStoreName] = useState("");
@@ -154,11 +161,15 @@ export default function AdminPage() {
   }
 
   async function loadMasterMeta() {
-    const [bmRes, sohRes] = await Promise.all([
+    const [bmRes, rrpRes, specRes, sohRes] = await Promise.all([
       fetch(apiUrl("/barcode-master/meta")),
+      fetch(apiUrl("/rrp-data/meta")),
+      fetch(apiUrl("/specials-data/meta")),
       fetch(apiUrl("/soh-data/meta")),
     ]);
     if (bmRes.ok) setBmMeta(await bmRes.json());
+    if (rrpRes.ok) setRrpMeta(await rrpRes.json());
+    if (specRes.ok) setSpecialsMeta(await specRes.json());
     if (sohRes.ok) setSohMeta(await sohRes.json());
   }
 
@@ -297,6 +308,66 @@ export default function AdminPage() {
     }
   }
 
+  async function handleRrpUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const pw = storedPassword();
+    setRrpUploading(true);
+    try {
+      const rows = await parseRrpFile(file);
+      if (!rows.length) { toast({ title: "Empty file", description: "No rows found.", variant: "destructive" }); return; }
+      const { byItem, count } = buildRrpMap(rows);
+      const res = await fetch(apiUrl("/admin/rrp-data"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pw },
+        body: JSON.stringify({ byItem, count }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRrpMeta({ uploadedAt: data.uploadedAt, count: data.count });
+        toast({ title: "RRP Data uploaded", description: `${Number(data.count).toLocaleString()} items stored.` });
+      } else {
+        const text = await res.text();
+        let errMsg = `Upload failed (${res.status})`;
+        try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { /* non-JSON */ }
+        toast({ title: "Upload failed", description: errMsg, variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Upload error", description: err instanceof Error ? err.message : "Failed to read or upload file.", variant: "destructive" });
+    } finally { setRrpUploading(false); }
+  }
+
+  async function handleSpecialsUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const pw = storedPassword();
+    setSpecialsUploading(true);
+    try {
+      const rows = await parseSpecialsFile(file);
+      if (!rows.length) { toast({ title: "Empty file", description: "No rows found.", variant: "destructive" }); return; }
+      const { byItem, count } = buildSpecialsMap(rows);
+      const res = await fetch(apiUrl("/admin/specials-data"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": pw },
+        body: JSON.stringify({ byItem, count }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSpecialsMeta({ uploadedAt: data.uploadedAt, count: data.count });
+        toast({ title: "Specials Data uploaded", description: `${Number(data.count).toLocaleString()} items stored.` });
+      } else {
+        const text = await res.text();
+        let errMsg = `Upload failed (${res.status})`;
+        try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { /* non-JSON */ }
+        toast({ title: "Upload failed", description: errMsg, variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Upload error", description: err instanceof Error ? err.message : "Failed to read or upload file.", variant: "destructive" });
+    } finally { setSpecialsUploading(false); }
+  }
+
   async function handleClearBm() {
     const pw = storedPassword();
     const res = await fetch(apiUrl("/admin/barcode-master"), {
@@ -307,6 +378,18 @@ export default function AdminPage() {
       setBmMeta({ uploadedAt: null, count: 0 });
       toast({ title: "Barcode Master cleared", description: "Removed from server. Devices will fall back to local uploads." });
     }
+  }
+
+  async function handleClearRrp() {
+    const pw = storedPassword();
+    const res = await fetch(apiUrl("/admin/rrp-data"), { method: "DELETE", headers: { "x-admin-password": pw } });
+    if (res.ok) { setRrpMeta({ uploadedAt: null, count: 0 }); toast({ title: "RRP Data cleared" }); }
+  }
+
+  async function handleClearSpecials() {
+    const pw = storedPassword();
+    const res = await fetch(apiUrl("/admin/specials-data"), { method: "DELETE", headers: { "x-admin-password": pw } });
+    if (res.ok) { setSpecialsMeta({ uploadedAt: null, count: 0 }); toast({ title: "Specials Data cleared" }); }
   }
 
   async function handleClearSoh() {
@@ -743,6 +826,102 @@ export default function AdminPage() {
                         <AlertDialogAction onClick={handleClearBm} className="bg-red-600 hover:bg-red-700 text-white">
                           Clear
                         </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+            </div>
+
+            {/* RRP Data */}
+            <div className="rounded-lg border border-zinc-800 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-white font-medium text-sm">RRP Data</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">Retail prices by region (CR / NR / WR) — Customer Price Group file</p>
+                </div>
+                {rrpMeta.uploadedAt ? (
+                  <span className="text-xs bg-emerald-900/40 text-emerald-400 border border-emerald-800 rounded px-2 py-0.5 whitespace-nowrap shrink-0">
+                    {rrpMeta.count.toLocaleString()} items
+                  </span>
+                ) : (
+                  <span className="text-xs bg-zinc-800 text-zinc-500 border border-zinc-700 rounded px-2 py-0.5 whitespace-nowrap shrink-0">
+                    Not uploaded
+                  </span>
+                )}
+              </div>
+              {rrpMeta.uploadedAt && (
+                <p className="text-zinc-500 text-xs">Last uploaded: {format(new Date(rrpMeta.uploadedAt), "dd/MM/yyyy HH:mm")}</p>
+              )}
+              <div className="flex items-center gap-2">
+                <input ref={rrpFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleRrpUpload} />
+                <Button size="sm" className="bg-amber-600 hover:bg-amber-500 text-white h-8" disabled={rrpUploading} onClick={() => rrpFileRef.current?.click()}>
+                  <Upload className="h-3.5 w-3.5 mr-1.5" />
+                  {rrpUploading ? "Uploading…" : rrpMeta.uploadedAt ? "Replace File" : "Upload File"}
+                </Button>
+                {rrpMeta.uploadedAt && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 text-zinc-500 hover:text-red-400 hover:bg-red-950/30 text-xs" disabled={rrpUploading}>
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />Clear
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-zinc-900 border-zinc-700">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="text-white">Clear RRP Data?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-zinc-400">Removes the RRP pricing file from the server.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClearRrp} className="bg-red-600 hover:bg-red-700 text-white">Clear</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+            </div>
+
+            {/* Specials Data */}
+            <div className="rounded-lg border border-zinc-800 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-white font-medium text-sm">Specials / Offers Data</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">Deal prices by region from Offers export (suffix -CR / -NR / -WR)</p>
+                </div>
+                {specialsMeta.uploadedAt ? (
+                  <span className="text-xs bg-emerald-900/40 text-emerald-400 border border-emerald-800 rounded px-2 py-0.5 whitespace-nowrap shrink-0">
+                    {specialsMeta.count.toLocaleString()} items
+                  </span>
+                ) : (
+                  <span className="text-xs bg-zinc-800 text-zinc-500 border border-zinc-700 rounded px-2 py-0.5 whitespace-nowrap shrink-0">
+                    Not uploaded
+                  </span>
+                )}
+              </div>
+              {specialsMeta.uploadedAt && (
+                <p className="text-zinc-500 text-xs">Last uploaded: {format(new Date(specialsMeta.uploadedAt), "dd/MM/yyyy HH:mm")}</p>
+              )}
+              <div className="flex items-center gap-2">
+                <input ref={specialsFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleSpecialsUpload} />
+                <Button size="sm" className="bg-amber-600 hover:bg-amber-500 text-white h-8" disabled={specialsUploading} onClick={() => specialsFileRef.current?.click()}>
+                  <Upload className="h-3.5 w-3.5 mr-1.5" />
+                  {specialsUploading ? "Uploading…" : specialsMeta.uploadedAt ? "Replace File" : "Upload File"}
+                </Button>
+                {specialsMeta.uploadedAt && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 text-zinc-500 hover:text-red-400 hover:bg-red-950/30 text-xs" disabled={specialsUploading}>
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />Clear
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-zinc-900 border-zinc-700">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="text-white">Clear Specials Data?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-zinc-400">Removes the Specials/Offers pricing file from the server.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClearSpecials} className="bg-red-600 hover:bg-red-700 text-white">Clear</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
