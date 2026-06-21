@@ -121,6 +121,8 @@ export function useBarcodeMaster() {
   const [masterData, setMasterData] = useState<Map<string, BarcodeMasterRow>>(new Map());
   const [masterByItem, setMasterByItem] = useState<Map<string, BarcodeMasterRow>>(new Map());
   const [isLoaded, setIsLoaded] = useState(false);
+  const [rrpCount, setRrpCount] = useState(0);
+  const [specialsCount, setSpecialsCount] = useState(0);
 
   useEffect(() => {
     async function init() {
@@ -204,6 +206,34 @@ export function useBarcodeMaster() {
     setMasterByItem(new Map());
   }, []);
 
+  const saveRrpData = useCallback((rrpByItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }>) => {
+    setMasterData(prev => {
+      const next = new Map(prev);
+      mergeRrpIntoMap(next, rrpByItem);
+      return next;
+    });
+    setMasterByItem(prev => {
+      const next = new Map(prev);
+      mergeRrpIntoMap(next, rrpByItem);
+      return next;
+    });
+    setRrpCount(Object.keys(rrpByItem).length);
+  }, []);
+
+  const saveSpecialsData = useCallback((specialsByItem: Record<string, { special_CR?: string; special_NR?: string; special_WR?: string }>) => {
+    setMasterData(prev => {
+      const next = new Map(prev);
+      mergeSpecialsIntoMap(next, specialsByItem);
+      return next;
+    });
+    setMasterByItem(prev => {
+      const next = new Map(prev);
+      mergeSpecialsIntoMap(next, specialsByItem);
+      return next;
+    });
+    setSpecialsCount(Object.keys(specialsByItem).length);
+  }, []);
+
   const lookupBarcode = useCallback((barcode: string, region?: string, itemNumber?: string): BarcodeMasterRow | undefined => {
     let normalized = String(barcode).trim();
     if (normalized.endsWith('.0')) normalized = normalized.slice(0, -2);
@@ -234,8 +264,12 @@ export function useBarcodeMaster() {
   return {
     masterData,
     isLoaded,
+    rrpCount,
+    specialsCount,
     saveMasterData,
     clearMasterData,
+    saveRrpData,
+    saveSpecialsData,
     lookupBarcode,
   };
 }

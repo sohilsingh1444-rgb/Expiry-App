@@ -43,9 +43,9 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { AlertCircle, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight, Database, ChevronsUpDown, Check, Camera } from "lucide-react";
+import { AlertCircle, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight, Database, ChevronsUpDown, Check, Camera, Tag, Percent } from "lucide-react";
 import { CameraScanner } from "@/components/camera-scanner";
-import { parseBarcodeMaster, parseSohFile, exportToExcel } from "@/lib/xlsx";
+import { parseBarcodeMaster, parseSohFile, parseRrpFile, buildRrpMap, parseSpecialsFile, buildSpecialsMap, exportToExcel } from "@/lib/xlsx";
 import { useBarcodeMaster } from "@/hooks/use-barcode-master";
 import { useSohData } from "@/hooks/use-soh-data";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -166,7 +166,7 @@ export default function Home() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
-  const { masterData, isLoaded, saveMasterData, clearMasterData, lookupBarcode } = useBarcodeMaster();
+  const { masterData, isLoaded, rrpCount, specialsCount, saveMasterData, clearMasterData, saveRrpData, saveSpecialsData, lookupBarcode } = useBarcodeMaster();
   const { sohData, sohByItem, saveSohData, clearSohData, lookupSoh } = useSohData();
   const totalSohItems = Math.max(sohData.size, sohByItem.size);
   const { stores: storeList, getStoreByCode, getStoreRegion } = useStoreList();
@@ -486,12 +486,46 @@ export default function Home() {
     try {
       const data = await parseSohFile(file);
       saveSohData(data);
-      toast({
-        title: "SOH Data Uploaded",
-        description: `Loaded ${data.length} items from SOH file.`,
-      });
+      toast({ title: "SOH Data Uploaded", description: `Loaded ${data.length} items from SOH file.` });
     } catch {
       toast({ title: "Upload Failed", description: "Failed to parse the SOH file.", variant: "destructive" });
+    }
+    e.target.value = "";
+  };
+
+  const handleRrpFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const rows = await parseRrpFile(file);
+      const { byItem, count } = buildRrpMap(rows);
+      if (count === 0) {
+        toast({ title: "No RRP data found", description: "Check that the file has Sales Code (CR/NR/WR), Item No., and price columns.", variant: "destructive" });
+      } else {
+        saveRrpData(byItem);
+        toast({ title: "RRP Data Uploaded", description: `Merged ${count.toLocaleString()} items into barcode lookup.` });
+      }
+    } catch {
+      toast({ title: "Upload Failed", description: "Failed to parse the RRP file.", variant: "destructive" });
+    }
+    e.target.value = "";
+  };
+
+  const handleSpecialsFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const rows = await parseSpecialsFile(file);
+      const { byItem, rrpByItem, count } = buildSpecialsMap(rows);
+      if (count === 0) {
+        toast({ title: "No Specials data found", description: "Check that the file has OfferDescription with -CR/-NR/-WR suffix and a Deal Price column.", variant: "destructive" });
+      } else {
+        saveSpecialsData(byItem);
+        if (Object.keys(rrpByItem).length > 0) saveRrpData(rrpByItem);
+        toast({ title: "Specials Data Uploaded", description: `Merged ${count.toLocaleString()} items into barcode lookup.` });
+      }
+    } catch {
+      toast({ title: "Upload Failed", description: "Failed to parse the Specials file.", variant: "destructive" });
     }
     e.target.value = "";
   };
@@ -1074,6 +1108,80 @@ export default function Home() {
                   <AlertCircle className="w-4 h-4 text-blue-600" />
                   <AlertDescription className="text-xs ml-2">
                     Upload your barcode master Excel file (.xlsx) to enable item lookups.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* RRP Data Upload Card */}
+          <Card className="border-zinc-200 shadow-sm bg-white">
+            <CardHeader className="pb-3 border-b border-zinc-100">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Tag className="w-4 h-4 text-emerald-500" />
+                RRP Data
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-500">Loaded items:</span>
+                <span className="font-bold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">{rrpCount.toLocaleString()}</span>
+              </div>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleRrpFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <Button variant="outline" className="w-full border-zinc-200 text-zinc-500 text-sm pointer-events-none">
+                    <Upload className="w-3.5 h-3.5 mr-2" /> Upload RRP file
+                  </Button>
+                </div>
+              </div>
+              {rrpCount === 0 && (
+                <Alert className="bg-emerald-50 border-emerald-200 text-emerald-800 py-2">
+                  <AlertCircle className="w-4 h-4 text-emerald-600" />
+                  <AlertDescription className="text-xs ml-2">
+                    Upload your Customer Price Group or Specials file to load retail prices.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Specials Data Upload Card */}
+          <Card className="border-zinc-200 shadow-sm bg-white">
+            <CardHeader className="pb-3 border-b border-zinc-100">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Percent className="w-4 h-4 text-orange-500" />
+                Specials / Offers Data
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-500">Loaded items:</span>
+                <span className="font-bold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">{specialsCount.toLocaleString()}</span>
+              </div>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleSpecialsFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <Button variant="outline" className="w-full border-zinc-200 text-zinc-500 text-sm pointer-events-none">
+                    <Upload className="w-3.5 h-3.5 mr-2" /> Upload Specials file
+                  </Button>
+                </div>
+              </div>
+              {specialsCount === 0 && (
+                <Alert className="bg-orange-50 border-orange-200 text-orange-800 py-2">
+                  <AlertCircle className="w-4 h-4 text-orange-600" />
+                  <AlertDescription className="text-xs ml-2">
+                    Upload your Specials/Offers export (.xlsx) to show deal prices per barcode.
                   </AlertDescription>
                 </Alert>
               )}
