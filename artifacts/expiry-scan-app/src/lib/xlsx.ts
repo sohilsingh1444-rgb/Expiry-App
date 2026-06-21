@@ -172,6 +172,9 @@ export function buildRrpMap(rows: any[]): {
     return '';
   };
 
+  // For Customer Price Group: track latest Starting Date per item+region to take most-recent price
+  const latestDate: Record<string, { CR?: Date; NR?: Date; WR?: Date }> = {};
+
   for (const row of rows) {
     const keys = Object.keys(row);
     let itemNo = '';
@@ -179,7 +182,6 @@ export function buildRrpMap(rows: any[]): {
     let region = '';
 
     if (isSpecialsFormat) {
-      // Specials/Offers file: use Standard Price Including VAT as RRP
       itemNo = getValExact(row, keys, 'No_', 'No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
       price = getValExact(row, keys, 'Standard Price Including VAT', 'standardpriceincludingvat', 'Standard Price', 'standardprice');
       const offerDesc = getValExact(row, keys, 'OfferDescription', 'offerdescription').toUpperCase();
@@ -187,19 +189,34 @@ export function buildRrpMap(rows: any[]): {
       if (/-NR\b/.test(offerDesc) || /\bNR\b/.test(offerDesc) || priceGroup === 'NR') region = 'NR';
       else if (/-CR\b/.test(offerDesc) || /\bCR\b/.test(offerDesc) || priceGroup === 'CR') region = 'CR';
       else if (/-WR\b/.test(offerDesc) || /-W\b/.test(offerDesc) || /\bWR\b/.test(offerDesc) || priceGroup === 'WR') region = 'WR';
+
+      if (!itemNo || !price || !region) continue;
+      if (!byItem[itemNo]) byItem[itemNo] = {};
+      if (region === 'CR' && !byItem[itemNo].rrp_CR) byItem[itemNo].rrp_CR = price;
+      else if (region === 'NR' && !byItem[itemNo].rrp_NR) byItem[itemNo].rrp_NR = price;
+      else if (region === 'WR' && !byItem[itemNo].rrp_WR) byItem[itemNo].rrp_WR = price;
     } else {
-      // Customer Price Group file
+      // Customer Price Group: take most-recent price per item+region (highest Starting Date)
       itemNo = getValExact(row, keys, 'Item No', 'Item No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
       price = getValExact(row, keys, 'Unit Price Including VAT', 'unitpriceincludingvat', 'Unit Price', 'unitprice');
-      region = getValExact(row, keys, 'Sales Code', 'salescode').toUpperCase();
+      region = getValExact(row, keys, 'Sales Code', 'salescode').toUpperCase().trim();
+      const startDate = parseDMY(getValExact(row, keys, 'Starting Date', 'startingdate', 'startdate'));
+
+      if (!itemNo || !price || !['CR','NR','WR'].includes(region)) continue;
+
+      if (!byItem[itemNo]) byItem[itemNo] = {};
+      if (!latestDate[itemNo]) latestDate[itemNo] = {};
+
+      const r = region as 'CR' | 'NR' | 'WR';
+      const prevDate = latestDate[itemNo][r];
+      // Update if: no prior entry, or this row has a newer/equal Starting Date, or no date (treat as most-recent)
+      if (!byItem[itemNo][`rrp_${r}`] || !prevDate || (startDate && startDate >= prevDate) || (!startDate && !prevDate)) {
+        if (!prevDate || !startDate || startDate >= prevDate) {
+          byItem[itemNo][`rrp_${r}`] = price;
+          if (startDate) latestDate[itemNo][r] = startDate;
+        }
+      }
     }
-
-    if (!itemNo || !price || !region) continue;
-
-    if (!byItem[itemNo]) byItem[itemNo] = {};
-    if (region === 'CR' && !byItem[itemNo].rrp_CR) byItem[itemNo].rrp_CR = price;
-    else if (region === 'NR' && !byItem[itemNo].rrp_NR) byItem[itemNo].rrp_NR = price;
-    else if (region === 'WR' && !byItem[itemNo].rrp_WR) byItem[itemNo].rrp_WR = price;
   }
 
   return { byItem, count: Object.keys(byItem).length };
@@ -284,16 +301,25 @@ export function buildSpecialsMap(rows: any[]): {
     const startStr = fmtDMY(startDate);
     const endStr = fmtDMY(endDate);
 
-    // Deal price: use "Offer Price Including VAT" as primary (user confirmed), fallbacks for other formats
-    const dealPrice = getValExact('Offer Price Including VAT', 'offerpriceincludingvat')
-      || getValExact('Deal Price Value', 'dealpricevalue')
-      || getValExact('Deal Price_Disc_ _', 'dealpricedisc')
-      || getValExact('Offer Price', 'offerprice')
-      || getValExact('Deal Price', 'dealprice');
-
     // RRP = standard shelf price before the deal
     const stdPrice = getValExact('Standard Price Including VAT', 'standardpriceincludingvat')
       || getValExact('Standard Price', 'standardprice');
+
+    // Deal price: primary = "Offer Price Including VAT" (absolute price in file)
+    // Fallback = Standard Price × (1 - Disc%/100) when "Deal Price_Disc_ _" is a discount percentage
+    let dealPrice = getValExact('Offer Price Including VAT', 'offerpriceincludingvat')
+      || getValExact('Deal Price Value', 'dealpricevalue')
+      || getValExact('Offer Price', 'offerprice')
+      || getValExact('Deal Price', 'dealprice');
+
+    if ((!dealPrice || parseFloat(dealPrice) <= 0) && stdPrice) {
+      const discPct = parseFloat(getValExact('Deal Price_Disc_ _', 'dealpricedisc') || '');
+      const std = parseFloat(stdPrice);
+      // discPct > 0 and < 100 confirms it is a percentage (not an absolute price or zero)
+      if (discPct > 0 && discPct < 100 && std > 0) {
+        dealPrice = (std * (1 - discPct / 100)).toFixed(2);
+      }
+    }
 
     // Region from offer description suffix, then Price Group, then Variant Code
     const offerDesc = getValExact('OfferDescription', 'offerdescription', 'offername').toUpperCase();
