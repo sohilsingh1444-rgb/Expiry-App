@@ -184,9 +184,9 @@ export function buildRrpMap(rows: any[]): {
       price = getValExact(row, keys, 'Standard Price Including VAT', 'standardpriceincludingvat', 'Standard Price', 'standardprice');
       const offerDesc = getValExact(row, keys, 'OfferDescription', 'offerdescription').toUpperCase();
       const priceGroup = getValExact(row, keys, 'Price Group', 'pricegroup').toUpperCase().trim();
-      if (/-NR\b/.test(offerDesc) || priceGroup === 'NR') region = 'NR';
-      else if (/-CR\b/.test(offerDesc) || priceGroup === 'CR') region = 'CR';
-      else if (/-WR\b/.test(offerDesc) || priceGroup === 'WR') region = 'WR';
+      if (/-NR\b/.test(offerDesc) || /\bNR\b/.test(offerDesc) || priceGroup === 'NR') region = 'NR';
+      else if (/-CR\b/.test(offerDesc) || /\bCR\b/.test(offerDesc) || priceGroup === 'CR') region = 'CR';
+      else if (/-WR\b/.test(offerDesc) || /-W\b/.test(offerDesc) || /\bWR\b/.test(offerDesc) || priceGroup === 'WR') region = 'WR';
     } else {
       // Customer Price Group file
       itemNo = getValExact(row, keys, 'Item No', 'Item No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
@@ -260,10 +260,12 @@ export function buildSpecialsMap(rows: any[]): {
     const itemNo = getValExact('No_', 'No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
     if (!itemNo) continue;
 
-    // Deal price: prefer "Deal Price Value", then "Offer Price Including VAT", then "Offer Price"
+    // Deal price: try all known column name variants
     const dealPrice = getValExact('Deal Price Value', 'dealpricevalue')
+      || getValExact('Deal Price_Disc_ _', 'dealpricedisc')
       || getValExact('Offer Price Including VAT', 'offerpriceincludingvat')
-      || getValExact('Offer Price', 'offerprice');
+      || getValExact('Offer Price', 'offerprice')
+      || getValExact('Deal Price', 'dealprice');
 
     // RRP = standard shelf price before the deal
     const stdPrice = getValExact('Standard Price Including VAT', 'standardpriceincludingvat')
@@ -275,10 +277,10 @@ export function buildSpecialsMap(rows: any[]): {
     const variantCode = getValExact('Variant Code', 'variantcode').toUpperCase().trim();
 
     let region = '';
-    // Check hyphen-suffix first, then space-suffix, then standalone word, then price group, then variant code
+    // Check hyphen-suffix first (-NR, -CR, -WR, -W = Western), then standalone word, then price group/variant code
     if (/-NR\b/.test(offerDesc) || /\bNR\b/.test(offerDesc) || priceGroup === 'NR' || variantCode === 'NR') region = 'NR';
     else if (/-CR\b/.test(offerDesc) || /\bCR\b/.test(offerDesc) || priceGroup === 'CR' || variantCode === 'CR') region = 'CR';
-    else if (/-WR\b/.test(offerDesc) || /\bWR\b/.test(offerDesc) || priceGroup === 'WR' || variantCode === 'WR') region = 'WR';
+    else if (/-WR\b/.test(offerDesc) || /-W\b/.test(offerDesc) || /\bWR\b/.test(offerDesc) || priceGroup === 'WR' || variantCode === 'WR') region = 'WR';
 
     if (!region) continue;
 
