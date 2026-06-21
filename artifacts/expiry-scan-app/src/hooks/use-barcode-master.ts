@@ -158,6 +158,7 @@ export function useBarcodeMaster() {
             if (rrpRes.ok) {
               const rrpData: { byItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }> } = await rrpRes.json();
               mergeRrpIntoMap(map, rrpData.byItem);
+              setRrpCount(Object.keys(rrpData.byItem).length);
             }
           }
         }
@@ -170,6 +171,7 @@ export function useBarcodeMaster() {
             if (specRes.ok) {
               const specData: { byItem: Record<string, { special_CR?: string; special_NR?: string; special_WR?: string }> } = await specRes.json();
               mergeSpecialsIntoMap(map, specData.byItem);
+              setSpecialsCount(Object.keys(specData.byItem).length);
             }
           }
         }
