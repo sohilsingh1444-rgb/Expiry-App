@@ -337,18 +337,22 @@ export function buildSpecialsMap(rows: any[]): {
     else if (/-CR\b/.test(offerDesc) || /\bCR\b/.test(offerDesc) || priceGroup === 'CR' || variantCode === 'CR') region = 'CR';
     else if (/-WR\b/.test(offerDesc) || /-W\b/.test(offerDesc) || /\bWR\b/.test(offerDesc) || priceGroup === 'WR' || variantCode === 'WR') region = 'WR';
 
-    if (!region) continue;
+    // If no region could be detected, store under all three regions so item is never silently dropped
+    const regions: string[] = region ? [region] : ['CR', 'NR', 'WR'];
 
-    // Store special price — last positive-price row per item+region wins
-    // (file is sorted oldest→newest, so the last row = most recent offer)
-    if (dealPrice && !isNaN(parseFloat(dealPrice)) && parseFloat(dealPrice) > 0) {
+    const hasPrice = dealPrice && !isNaN(parseFloat(dealPrice)) && parseFloat(dealPrice) > 0;
+
+    for (const r of regions) {
       if (!byItem[itemNo]) byItem[itemNo] = {};
-      if (region === 'CR') {
-        byItem[itemNo].special_CR = dealPrice; byItem[itemNo].special_CR_start = startStr; byItem[itemNo].special_CR_end = endStr;
-      } else if (region === 'NR') {
-        byItem[itemNo].special_NR = dealPrice; byItem[itemNo].special_NR_start = startStr; byItem[itemNo].special_NR_end = endStr;
-      } else if (region === 'WR') {
-        byItem[itemNo].special_WR = dealPrice; byItem[itemNo].special_WR_start = startStr; byItem[itemNo].special_WR_end = endStr;
+      // Always record the item. Only write price fields when we have a positive deal price.
+      if (hasPrice) {
+        if (r === 'CR') {
+          byItem[itemNo].special_CR = dealPrice; byItem[itemNo].special_CR_start = startStr; byItem[itemNo].special_CR_end = endStr;
+        } else if (r === 'NR') {
+          byItem[itemNo].special_NR = dealPrice; byItem[itemNo].special_NR_start = startStr; byItem[itemNo].special_NR_end = endStr;
+        } else if (r === 'WR') {
+          byItem[itemNo].special_WR = dealPrice; byItem[itemNo].special_WR_start = startStr; byItem[itemNo].special_WR_end = endStr;
+        }
       }
     }
 
