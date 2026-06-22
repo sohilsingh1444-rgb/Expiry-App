@@ -65,7 +65,7 @@ const scanSchema = z.object({
   barcode: z.string().min(1, "Barcode is required"),
   itemNumber: z.string().optional(),
   description: z.string().optional(),
-  qty: z.coerce.number({ invalid_type_error: "Qty is required" }).min(0.01, "Qty must be greater than 0"),
+  qty: z.coerce.number({ invalid_type_error: "Qty is required" }).min(0),
   expiryDate: z.string().optional(),
   remarks: z.string().optional(),
   wrongRrp: z.boolean().default(false),
@@ -76,6 +76,13 @@ const scanSchema = z.object({
   notOnDisplayQty: z.coerce.number().optional(),
 }).superRefine((data, ctx) => {
   const hasComplianceFlag = data.wrongRrp || data.missingSpecialTicket || data.notOnDisplay;
+  if (!hasComplianceFlag && data.qty <= 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Qty must be greater than 0",
+      path: ["qty"],
+    });
+  }
   if (!hasComplianceFlag && !data.expiryDate) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
