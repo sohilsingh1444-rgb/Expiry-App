@@ -196,25 +196,24 @@ export function buildRrpMap(rows: any[]): {
       else if (region === 'NR' && !byItem[itemNo].rrp_NR) byItem[itemNo].rrp_NR = price;
       else if (region === 'WR' && !byItem[itemNo].rrp_WR) byItem[itemNo].rrp_WR = price;
     } else {
-      // Customer Price Group: take most-recent price per item+region (highest Starting Date)
+      // Customer Price Group: take the most-recent price per item+region (highest Starting Date wins)
       itemNo = getValExact(row, keys, 'Item No', 'Item No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
       price = getValExact(row, keys, 'Unit Price Including VAT', 'unitpriceincludingvat', 'Unit Price', 'unitprice');
       region = getValExact(row, keys, 'Sales Code', 'salescode').toUpperCase().trim();
       const startDate = parseDMY(getValExact(row, keys, 'Starting Date', 'startingdate', 'startdate'));
 
-      if (!itemNo || !price || !['CR','NR','WR'].includes(region)) continue;
+      if (!itemNo || !price || !region) continue;  // accept any non-empty Sales Code
 
       if (!byItem[itemNo]) byItem[itemNo] = {};
       if (!latestDate[itemNo]) latestDate[itemNo] = {};
 
-      const r = region as 'CR' | 'NR' | 'WR';
-      const prevDate = latestDate[itemNo][r];
-      // Update if: no prior entry, or this row has a newer/equal Starting Date, or no date (treat as most-recent)
-      if (!byItem[itemNo][`rrp_${r}`] || !prevDate || (startDate && startDate >= prevDate) || (!startDate && !prevDate)) {
-        if (!prevDate || !startDate || startDate >= prevDate) {
-          byItem[itemNo][`rrp_${r}`] = price;
-          if (startDate) latestDate[itemNo][r] = startDate;
-        }
+      const prevDate = latestDate[itemNo][region as keyof typeof latestDate[string]];
+      const isNewer = !byItem[itemNo][`rrp_${region}`]       // no prior entry — always store
+        || (startDate && (!prevDate || startDate >= prevDate)); // or this row has a newer Starting Date
+
+      if (isNewer) {
+        byItem[itemNo][`rrp_${region}`] = price;
+        if (startDate) latestDate[itemNo][region as keyof typeof latestDate[string]] = startDate;
       }
     }
   }
@@ -333,32 +332,16 @@ export function buildSpecialsMap(rows: any[]): {
 
     if (!region) continue;
 
-    // Store special price — per item+region, take the row with the LATEST ending date
-    // (most recent month's offer wins over historical data; positive price required)
+    // Store special price — last positive-price row per item+region wins
+    // (file is sorted oldest→newest, so the last row = most recent offer)
     if (dealPrice && !isNaN(parseFloat(dealPrice)) && parseFloat(dealPrice) > 0) {
-      const newPrice = parseFloat(dealPrice);
       if (!byItem[itemNo]) byItem[itemNo] = {};
       if (region === 'CR') {
-        const prevEnd = specialsLatestEnd[itemNo]?.CR;
-        if (!byItem[itemNo].special_CR || !prevEnd || (endDate && endDate >= prevEnd) || (!endDate && newPrice > 0)) {
-          byItem[itemNo].special_CR = dealPrice; byItem[itemNo].special_CR_start = startStr; byItem[itemNo].special_CR_end = endStr;
-          if (!specialsLatestEnd[itemNo]) specialsLatestEnd[itemNo] = {};
-          if (endDate) specialsLatestEnd[itemNo].CR = endDate;
-        }
+        byItem[itemNo].special_CR = dealPrice; byItem[itemNo].special_CR_start = startStr; byItem[itemNo].special_CR_end = endStr;
       } else if (region === 'NR') {
-        const prevEnd = specialsLatestEnd[itemNo]?.NR;
-        if (!byItem[itemNo].special_NR || !prevEnd || (endDate && endDate >= prevEnd) || (!endDate && newPrice > 0)) {
-          byItem[itemNo].special_NR = dealPrice; byItem[itemNo].special_NR_start = startStr; byItem[itemNo].special_NR_end = endStr;
-          if (!specialsLatestEnd[itemNo]) specialsLatestEnd[itemNo] = {};
-          if (endDate) specialsLatestEnd[itemNo].NR = endDate;
-        }
+        byItem[itemNo].special_NR = dealPrice; byItem[itemNo].special_NR_start = startStr; byItem[itemNo].special_NR_end = endStr;
       } else if (region === 'WR') {
-        const prevEnd = specialsLatestEnd[itemNo]?.WR;
-        if (!byItem[itemNo].special_WR || !prevEnd || (endDate && endDate >= prevEnd) || (!endDate && newPrice > 0)) {
-          byItem[itemNo].special_WR = dealPrice; byItem[itemNo].special_WR_start = startStr; byItem[itemNo].special_WR_end = endStr;
-          if (!specialsLatestEnd[itemNo]) specialsLatestEnd[itemNo] = {};
-          if (endDate) specialsLatestEnd[itemNo].WR = endDate;
-        }
+        byItem[itemNo].special_WR = dealPrice; byItem[itemNo].special_WR_start = startStr; byItem[itemNo].special_WR_end = endStr;
       }
     }
 
