@@ -2,18 +2,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { getApiBase } from '@/lib/api-base';
 
 export type SohStoreMap = Record<string, { byBarcode: Record<string, number>; byItem: Record<string, number> }>;
+export type SohRegionMap = Record<string, { byBarcode: Record<string, number>; byItem: Record<string, number> }>;
 
 export function buildSohMaps(rows: any[]): {
   byBarcode: Record<string, number>;
   byItem: Record<string, number>;
   byStore: SohStoreMap;
+  byRegion: SohRegionMap;
   count: number;
 } {
-  if (!rows.length) return { byBarcode: {}, byItem: {}, byStore: {}, count: 0 };
+  if (!rows.length) return { byBarcode: {}, byItem: {}, byStore: {}, byRegion: {}, count: 0 };
 
   const mapByBarcode: Record<string, number> = {};
   const mapByItem: Record<string, number> = {};
   const mapByStore: SohStoreMap = {};
+  const mapByRegion: SohRegionMap = {};
 
   const firstRow = rows[0];
   const keys = Object.keys(firstRow);
@@ -28,6 +31,7 @@ export function buildSohMaps(rows: any[]): {
   const barcodeCol = findCol(['barcode', 'upc', 'ean', 'gtin', 'code']);
   const itemCol    = findCol(['itemno', 'itemnum', 'itemnumber', 'itemcode', 'article', 'sku', 'item']);
   const storeCol   = findCol(['storelocation', 'storename', 'store', 'location', 'branch', 'outlet', 'site']);
+  const regionCol  = findCol(['region', 'pricegroup', 'pricegrp', 'area', 'zone', 'salescod', 'salescode']);
   const sohCol     = findCol(['soh', 'stockonhand', 'stock', 'onhand', 'available', 'totalqty',
                               'totalstock', 'balanceqty', 'qtyonhand', 'availqty', 'quantity', 'qty',
                               'inventory', 'inv', 'inven', 'onhandqty', 'physicalinv']);
@@ -36,8 +40,11 @@ export function buildSohMaps(rows: any[]): {
     ...(barcodeCol ? [barcodeCol] : []),
     ...(itemCol ? [itemCol] : []),
     ...(storeCol ? [storeCol] : []),
+    ...(regionCol ? [regionCol] : []),
     ...(!barcodeCol && !itemCol ? [keys[0]] : []),
   ]);
+
+  const VALID_REGIONS = new Set(['CR', 'NR', 'WR']);
 
   rows.forEach(row => {
     let sohNum: number;
@@ -79,12 +86,30 @@ export function buildSohMaps(rows: any[]): {
         }
       }
     }
+
+    // Build byRegion — detect region from dedicated region column OR from storeCol value (CR/NR/WR)
+    let regionKey = '';
+    if (regionCol) {
+      const rv = String(row[regionCol] ?? '').trim().toUpperCase();
+      if (VALID_REGIONS.has(rv)) regionKey = rv;
+    }
+    if (!regionKey && storeCol) {
+      // Many SOH files have "CR", "NR", or "WR" directly in the store/location column
+      const sv = String(row[storeCol] ?? '').trim().toUpperCase();
+      if (VALID_REGIONS.has(sv)) regionKey = sv;
+    }
+    if (regionKey) {
+      if (!mapByRegion[regionKey]) mapByRegion[regionKey] = { byBarcode: {}, byItem: {} };
+      if (barcodeStr) mapByRegion[regionKey].byBarcode[barcodeStr] = (mapByRegion[regionKey].byBarcode[barcodeStr] ?? 0) + sohNum;
+      if (itemStr) mapByRegion[regionKey].byItem[itemStr] = (mapByRegion[regionKey].byItem[itemStr] ?? 0) + sohNum;
+    }
   });
 
   return {
     byBarcode: mapByBarcode,
     byItem: mapByItem,
     byStore: mapByStore,
+    byRegion: mapByRegion,
     count: Math.max(Object.keys(mapByBarcode).length, Object.keys(mapByItem).length),
   };
 }
@@ -110,6 +135,7 @@ export function useSohData() {
   const [sohData, setSohData] = useState<Map<string, number>>(new Map());
   const [sohByItem, setSohByItem] = useState<Map<string, number>>(new Map());
   const [sohByStore, setSohByStore] = useState<Map<string, { byBarcode: Record<string, number>; byItem: Record<string, number> }>>(new Map());
+  const [sohByRegion, setSohByRegion] = useState<Map<string, { byBarcode: Record<string, number>; byItem: Record<string, number> }>>(new Map());
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -121,10 +147,11 @@ export function useSohData() {
           if (meta.uploadedAt && meta.count > 0) {
             const dataRes = await fetch(`${getApiBase()}/api/soh-data`);
             if (dataRes.ok) {
-              const data: { byBarcode: Record<string, number>; byItem: Record<string, number>; byStore?: SohStoreMap } = await dataRes.json();
+              const data: { byBarcode: Record<string, number>; byItem: Record<string, number>; byStore?: SohStoreMap; byRegion?: SohRegionMap } = await dataRes.json();
               setSohData(new Map(Object.entries(data.byBarcode).map(([k, v]) => [k, Number(v)])));
               setSohByItem(new Map(Object.entries(data.byItem).map(([k, v]) => [k, Number(v)])));
               if (data.byStore) setSohByStore(new Map(Object.entries(data.byStore)));
+              if (data.byRegion) setSohByRegion(new Map(Object.entries(data.byRegion)));
             }
           }
         }
@@ -138,36 +165,56 @@ export function useSohData() {
   }, []);
 
   const saveSohData = useCallback((rows: any[]) => {
-    const { byBarcode, byItem, byStore } = buildSohMaps(rows);
+    const { byBarcode, byItem, byStore, byRegion } = buildSohMaps(rows);
     setSohData(new Map(Object.entries(byBarcode).map(([k, v]) => [k, Number(v)])));
     setSohByItem(new Map(Object.entries(byItem).map(([k, v]) => [k, Number(v)])));
     setSohByStore(new Map(Object.entries(byStore)));
+    setSohByRegion(new Map(Object.entries(byRegion)));
   }, []);
 
   const clearSohData = useCallback(() => {
     setSohData(new Map());
     setSohByItem(new Map());
     setSohByStore(new Map());
+    setSohByRegion(new Map());
   }, []);
 
-  const lookupSoh = useCallback((barcode: string, itemNumber?: string, storeIdentifiers?: string[]): number | undefined => {
+  const lookupSoh = useCallback((barcode: string, itemNumber?: string, storeIdentifiers?: string[], region?: string): number | undefined => {
     let nb = String(barcode).trim();
     if (nb.endsWith('.0')) nb = nb.slice(0, -2);
+    let ni = '';
+    if (itemNumber) {
+      ni = String(itemNumber).trim();
+      if (ni.endsWith('.0')) ni = ni.slice(0, -2);
+    }
 
+    // Tier 1: store-specific lookup
     if (storeIdentifiers && storeIdentifiers.length > 0) {
       const storeData = findStoreData(sohByStore, storeIdentifiers);
       if (storeData) {
         const bySb = storeData.byBarcode[nb];
         if (bySb != null) return bySb;
-        if (itemNumber) {
-          let ni = String(itemNumber).trim();
-          if (ni.endsWith('.0')) ni = ni.slice(0, -2);
+        if (ni) {
           const byIb = storeData.byItem[ni];
           if (byIb != null) return byIb;
         }
       }
     }
 
+    // Tier 2: region-specific lookup (CR / NR / WR)
+    if (region) {
+      const regionData = sohByRegion.get(region.toUpperCase());
+      if (regionData) {
+        const byRb = regionData.byBarcode[nb];
+        if (byRb != null) return byRb;
+        if (ni) {
+          const byRi = regionData.byItem[ni];
+          if (byRi != null) return byRi;
+        }
+      }
+    }
+
+    // Tier 3: global fallback
     const byBarcode = sohData.get(nb);
     if (byBarcode != null) return byBarcode;
 

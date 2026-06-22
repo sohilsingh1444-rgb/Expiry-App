@@ -217,12 +217,14 @@ router.get("/soh-data", async (_req, res): Promise<void> => {
   const byBarcodeJson = await getSetting("soh_by_barcode_json");
   const byItemJson = await getSetting("soh_by_item_json");
   const byStoreJson = await getSetting("soh_by_store_json");
+  const byRegionJson = await getSetting("soh_by_region_json");
   const uploadedAt = await getSetting("soh_uploaded_at");
   const count = await getSetting("soh_count");
   const payload = JSON.stringify({
     byBarcode: byBarcodeJson ? JSON.parse(byBarcodeJson) : {},
     byItem: byItemJson ? JSON.parse(byItemJson) : {},
     byStore: byStoreJson ? JSON.parse(byStoreJson) : {},
+    byRegion: byRegionJson ? JSON.parse(byRegionJson) : {},
     uploadedAt: uploadedAt ?? null,
     count: count ? Number(count) : 0,
   });
@@ -235,10 +237,11 @@ router.get("/soh-data", async (_req, res): Promise<void> => {
 
 router.post("/admin/soh-data", async (req, res): Promise<void> => {
   if (!checkAdminPassword(req, res)) return;
-  const { byBarcode, byItem, byStore, count } = req.body as {
+  const { byBarcode, byItem, byStore, byRegion, count } = req.body as {
     byBarcode?: Record<string, number>;
     byItem?: Record<string, number>;
     byStore?: Record<string, unknown>;
+    byRegion?: Record<string, unknown>;
     count?: number;
   };
   if (!byBarcode && !byItem) {
@@ -253,6 +256,7 @@ router.post("/admin/soh-data", async (req, res): Promise<void> => {
   await setSetting("soh_by_barcode_json", JSON.stringify(byBarcode ?? {}));
   await setSetting("soh_by_item_json", JSON.stringify(byItem ?? {}));
   await setSetting("soh_by_store_json", JSON.stringify(byStore ?? {}));
+  await setSetting("soh_by_region_json", JSON.stringify(byRegion ?? {}));
   await setSetting("soh_uploaded_at", now);
   await setSetting("soh_count", String(itemCount));
   res.json({ ok: true, uploadedAt: now, count: itemCount });
@@ -260,7 +264,7 @@ router.post("/admin/soh-data", async (req, res): Promise<void> => {
 
 router.delete("/admin/soh-data", async (req, res): Promise<void> => {
   if (!checkAdminPassword(req, res)) return;
-  for (const key of ["soh_by_barcode_json", "soh_by_item_json", "soh_by_store_json", "soh_uploaded_at", "soh_count"]) {
+  for (const key of ["soh_by_barcode_json", "soh_by_item_json", "soh_by_store_json", "soh_by_region_json", "soh_uploaded_at", "soh_count"]) {
     await db.delete(appSettingsTable).where(eq(appSettingsTable.key, key));
   }
   res.json({ ok: true });

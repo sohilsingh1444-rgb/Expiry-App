@@ -178,6 +178,7 @@ export default function Home() {
         getStoreByCode(setupData.storeLocation)?.name ?? '',
       ].filter(Boolean)
     : [];
+  const storeRegion: string | undefined = setupData?.storeLocation ? getStoreRegion(setupData.storeLocation) : undefined;
   const { isOnline, pendingCount, refreshPendingCount } = useOnlineStatus();
 
   const setupForm = useForm<z.infer<typeof setupSchema>>({
@@ -236,7 +237,6 @@ export default function Home() {
 
   useEffect(() => {
     if (watchBarcode && watchBarcode.length > 3) {
-      const storeRegion = setupData?.storeLocation ? getStoreRegion(setupData.storeLocation) : undefined;
       const match = lookupBarcode(watchBarcode, storeRegion, scanGetValues("itemNumber"));
       if (match) {
         setMatchedItem(match);
@@ -429,7 +429,7 @@ export default function Home() {
       remarks: values.remarks,
       ...(matchedItem?.rrp ? { rrp: parseFloat(String(matchedItem.rrp)) } : {}),
       ...(matchedItem?.special ? { specialPrice: parseFloat(String(matchedItem.special)) } : {}),
-      ...(lookupSoh(barcodeStr, values.itemNumber, storeIdentifiers) != null ? { systemSoh: lookupSoh(barcodeStr, values.itemNumber, storeIdentifiers)! } : {}),
+      ...(lookupSoh(barcodeStr, values.itemNumber, storeIdentifiers, storeRegion) != null ? { systemSoh: lookupSoh(barcodeStr, values.itemNumber, storeIdentifiers, storeRegion)! } : {}),
       wrongRrp: values.wrongRrp,
       missingSpecialTicket: values.missingSpecialTicket,
       notOnDisplay: values.notOnDisplay,
@@ -919,10 +919,10 @@ export default function Home() {
                           </div>
                         )}
                         {totalSohItems > 0 && (
-                          <div className={`bg-white rounded-md border px-2 py-1.5 ${lookupSoh(watchBarcode, watchItemNumber, storeIdentifiers) != null ? 'border-purple-100' : 'border-zinc-100'}`}>
+                          <div className={`bg-white rounded-md border px-2 py-1.5 ${lookupSoh(watchBarcode, watchItemNumber, storeIdentifiers, storeRegion) != null ? 'border-purple-100' : 'border-zinc-100'}`}>
                             <div className="text-xs text-zinc-500">System SOH</div>
-                            {lookupSoh(watchBarcode, watchItemNumber, storeIdentifiers) != null
-                              ? <div className="font-bold text-purple-700">{lookupSoh(watchBarcode, watchItemNumber, storeIdentifiers)}</div>
+                            {lookupSoh(watchBarcode, watchItemNumber, storeIdentifiers, storeRegion) != null
+                              ? <div className="font-bold text-purple-700">{lookupSoh(watchBarcode, watchItemNumber, storeIdentifiers, storeRegion)}</div>
                               : <div className="font-bold text-zinc-400">—</div>
                             }
                           </div>
