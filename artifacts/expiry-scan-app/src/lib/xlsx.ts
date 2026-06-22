@@ -318,6 +318,13 @@ export function buildSpecialsMap(rows: any[]): {
       if (discPct > 0 && discPct < 100 && std > 0) {
         dealPrice = (std * (1 - discPct / 100)).toFixed(2);
       }
+      // Second fallback: Standard Price Inc VAT − Discount Amount Inc VAT
+      if ((!dealPrice || parseFloat(dealPrice) <= 0) && std > 0) {
+        const discAmtInclVat = parseFloat(getValExact('Discount Amount Including VAT', 'discountamountincludingvat') || '');
+        if (discAmtInclVat > 0 && std - discAmtInclVat > 0) {
+          dealPrice = (std - discAmtInclVat).toFixed(2);
+        }
+      }
     }
 
     // Region from offer description suffix, then Price Group, then Variant Code
