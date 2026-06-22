@@ -148,10 +148,10 @@ export async function parseRrpFile(file: File): Promise<any[]> {
 //   1. Customer Price Group: Sales Code (CR/NR/WR) | Item No. | Unit Price Including VAT
 //   2. Specials/Offers file: OfferDescription (-CR/-NR/-WR suffix) | No_ | Standard Price Including VAT
 export function buildRrpMap(rows: any[]): {
-  byItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }>;
+  byItem: Record<string, Record<string, string>>;
   count: number;
 } {
-  const byItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }> = {};
+  const byItem: Record<string, Record<string, string>> = {};
   if (!rows.length) return { byItem, count: 0 };
 
   const norm = (s: string) => s.toLowerCase().replace(/[\s_\-\.]/g, '');
@@ -174,8 +174,17 @@ export function buildRrpMap(rows: any[]): {
     return '';
   };
 
-  // For Customer Price Group: track latest Starting Date per item+region to take most-recent price
-  const latestDate: Record<string, { CR?: Date; NR?: Date; WR?: Date }> = {};
+  // UOM suffix helper: '' = EACH, '_6' = INNER6/CASE6, '_12' = CASE12
+  function uomSuffix(uom: string): string | null {
+    const u = uom.toUpperCase().replace(/[\s\-_]/g, '');
+    if (/^(INNER6|CASE6|6PACK|PACK6|6PK|INNERPACK6)$/.test(u) || (u.includes('6') && (u.includes('INNER') || u.includes('CASE') || u.includes('PACK')))) return '_6';
+    if (/^(CASE12|12PACK|PACK12|12PK|INNERPACK12)$/.test(u) || (u.includes('12') && (u.includes('CASE') || u.includes('PACK')))) return '_12';
+    if (!u || u === 'EACH' || u === 'EA' || u === 'SINGLE' || u === 'UNIT' || u === 'PC' || u === 'PCS') return '';
+    return null; // skip unknown UOM (CASE24, etc.)
+  }
+
+  // For Customer Price Group: track latest Starting Date per item per compound key (region+uom)
+  const latestDate: Record<string, Record<string, Date>> = {};
 
   for (const row of rows) {
     const keys = Object.keys(row);
@@ -184,6 +193,7 @@ export function buildRrpMap(rows: any[]): {
     let region = '';
 
     if (isSpecialsFormat) {
+      // Specials format has no UOM column — treat all as EACH
       itemNo = getValExact(row, keys, 'No_', 'No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
       price = getValExact(row, keys, 'Standard Price Including VAT', 'standardpriceincludingvat', 'Standard Price', 'standardprice');
       const offerDesc = getValExact(row, keys, 'OfferDescription', 'offerdescription').toUpperCase();
@@ -194,28 +204,30 @@ export function buildRrpMap(rows: any[]): {
 
       if (!itemNo || !price || !region) continue;
       if (!byItem[itemNo]) byItem[itemNo] = {};
-      if (region === 'CR' && !byItem[itemNo].rrp_CR) byItem[itemNo].rrp_CR = price;
-      else if (region === 'NR' && !byItem[itemNo].rrp_NR) byItem[itemNo].rrp_NR = price;
-      else if (region === 'WR' && !byItem[itemNo].rrp_WR) byItem[itemNo].rrp_WR = price;
+      const k = `rrp_${region}`;
+      if (!byItem[itemNo][k]) byItem[itemNo][k] = price;
     } else {
-      // Customer Price Group: take the most-recent price per item+region (highest Starting Date wins)
+      // Customer Price Group: detect UOM; take the most-recent price per item+region+uom
       itemNo = getValExact(row, keys, 'Item No', 'Item No.', 'itemno', 'itemnumber').replace(/\.0$/, '').trim();
       price = getValExact(row, keys, 'Unit Price Including VAT', 'unitpriceincludingvat', 'Unit Price', 'unitprice');
       region = getValExact(row, keys, 'Sales Code', 'salescode').toUpperCase().trim();
+      const uomRaw = getValExact(row, keys, 'Unit of Measure Code', 'unitofmeasurecode', 'UOM', 'uom', 'Unit of Measure', 'unitofmeasure').trim();
+      const suffix = uomSuffix(uomRaw);
       const startDate = parseDMY(getValExact(row, keys, 'Starting Date', 'startingdate', 'startdate'));
 
-      if (!itemNo || !price || !region) continue;  // accept any non-empty Sales Code
+      if (!itemNo || !price || !region || suffix === null) continue;
 
+      const compoundKey = `rrp_${region}${suffix}`;
       if (!byItem[itemNo]) byItem[itemNo] = {};
       if (!latestDate[itemNo]) latestDate[itemNo] = {};
 
-      const prevDate = latestDate[itemNo][region as keyof typeof latestDate[string]];
-      const isNewer = !byItem[itemNo][`rrp_${region}`]       // no prior entry — always store
-        || (startDate && (!prevDate || startDate >= prevDate)); // or this row has a newer Starting Date
+      const prevDate = latestDate[itemNo][compoundKey];
+      const isNewer = !byItem[itemNo][compoundKey]
+        || (startDate && (!prevDate || startDate >= prevDate));
 
       if (isNewer) {
-        byItem[itemNo][`rrp_${region}`] = price;
-        if (startDate) latestDate[itemNo][region as keyof typeof latestDate[string]] = startDate;
+        byItem[itemNo][compoundKey] = price;
+        if (startDate) latestDate[itemNo][compoundKey] = startDate;
       }
     }
   }

@@ -6,18 +6,26 @@ export type BarcodeMasterRow = {
   itemNumber: string;
   description: string;
   rrp?: string;
+  rrp_6?: string;
+  rrp_12?: string;
   special?: string;
   special_start?: string;
   special_end?: string;
   rrp_CRWR?: string;
+  rrp_CRWR_6?: string;
+  rrp_CRWR_12?: string;
   special_CRWR?: string;
   special_CRWR_start?: string;
   special_CRWR_end?: string;
   rrp_NR?: string;
+  rrp_NR_6?: string;
+  rrp_NR_12?: string;
   special_NR?: string;
   special_NR_start?: string;
   special_NR_end?: string;
   rrp_WR?: string;
+  rrp_WR_6?: string;
+  rrp_WR_12?: string;
   special_WR?: string;
   special_WR_start?: string;
   special_WR_end?: string;
@@ -100,7 +108,7 @@ export function buildBarcodeMaps(rows: any[]): {
 // Merge RRP pricing (from dedicated RRP file) into the barcode map in-place
 export function mergeRrpIntoMap(
   map: Map<string, BarcodeMasterRow>,
-  rrpByItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }>
+  rrpByItem: Record<string, Record<string, string>>
 ) {
   for (const row of map.values()) {
     const pricing = rrpByItem[row.itemNumber];
@@ -108,6 +116,12 @@ export function mergeRrpIntoMap(
     if (pricing.rrp_CR) { row.rrp_CRWR = pricing.rrp_CR; if (!row.rrp) row.rrp = pricing.rrp_CR; }
     if (pricing.rrp_NR) row.rrp_NR = pricing.rrp_NR;
     if (pricing.rrp_WR) row.rrp_WR = pricing.rrp_WR;
+    if (pricing.rrp_CR_6)  { row.rrp_CRWR_6 = pricing.rrp_CR_6; if (!row.rrp_6) row.rrp_6 = pricing.rrp_CR_6; }
+    if (pricing.rrp_NR_6)  row.rrp_NR_6  = pricing.rrp_NR_6;
+    if (pricing.rrp_WR_6)  row.rrp_WR_6  = pricing.rrp_WR_6;
+    if (pricing.rrp_CR_12) { row.rrp_CRWR_12 = pricing.rrp_CR_12; if (!row.rrp_12) row.rrp_12 = pricing.rrp_CR_12; }
+    if (pricing.rrp_NR_12) row.rrp_NR_12 = pricing.rrp_NR_12;
+    if (pricing.rrp_WR_12) row.rrp_WR_12 = pricing.rrp_WR_12;
   }
 }
 
@@ -231,7 +245,7 @@ export function useBarcodeMaster() {
     setMasterByItem(new Map());
   }, []);
 
-  const saveRrpData = useCallback((rrpByItem: Record<string, { rrp_CR?: string; rrp_NR?: string; rrp_WR?: string }>) => {
+  const saveRrpData = useCallback((rrpByItem: Record<string, Record<string, string>>) => {
     setMasterData(prev => {
       const next = new Map(prev);
       mergeRrpIntoMap(next, rrpByItem);
@@ -280,6 +294,8 @@ export function useBarcodeMaster() {
       return {
         ...row,
         rrp: isNR ? (row.rrp_NR || row.rrp) : isWR ? (row.rrp_WR || row.rrp) : (row.rrp_CRWR || row.rrp),
+        rrp_6: isNR ? (row.rrp_NR_6 || row.rrp_CRWR_6 || row.rrp_6) : isWR ? (row.rrp_WR_6 || row.rrp_CRWR_6 || row.rrp_6) : (row.rrp_CRWR_6 || row.rrp_6),
+        rrp_12: isNR ? (row.rrp_NR_12 || row.rrp_CRWR_12 || row.rrp_12) : isWR ? (row.rrp_WR_12 || row.rrp_CRWR_12 || row.rrp_12) : (row.rrp_CRWR_12 || row.rrp_12),
         special: isNR ? (row.special_NR || row.special) : isWR ? (row.special_WR || row.special) : (row.special_CRWR || row.special),
         special_start: isNR ? (row.special_NR_start || row.special_CRWR_start) : isWR ? (row.special_WR_start || row.special_CRWR_start) : row.special_CRWR_start,
         special_end: isNR ? (row.special_NR_end || row.special_CRWR_end) : isWR ? (row.special_WR_end || row.special_CRWR_end) : row.special_CRWR_end,

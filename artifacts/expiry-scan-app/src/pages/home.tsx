@@ -912,13 +912,24 @@ export default function Home() {
                   {matchedItem && (matchedItem.rrp || matchedItem.special || matchedItem.soh || totalSohItems > 0) && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-1.5 text-sm">
                       <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Item Data</div>
-                      <div className="grid grid-cols-2 gap-2 text-center">
-                        {matchedItem?.rrp && (
-                          <div className="bg-white rounded-md border border-amber-100 px-2 py-1.5">
-                            <div className="text-xs text-zinc-500">RRP</div>
-                            <div className="font-bold text-zinc-900">${matchedItem.rrp}</div>
+                      {/* RRP row: Each / Case of 6 / Case of 12 */}
+                      {(matchedItem?.rrp || matchedItem?.rrp_6 || matchedItem?.rrp_12) && (
+                        <div className="grid grid-cols-3 gap-1.5 text-center">
+                          <div className="bg-white rounded-md border border-amber-100 px-1.5 py-1.5">
+                            <div className="text-xs text-zinc-500">RRP (Each)</div>
+                            <div className="font-bold text-zinc-900">{matchedItem?.rrp ? `$${matchedItem.rrp}` : '—'}</div>
                           </div>
-                        )}
+                          <div className="bg-white rounded-md border border-amber-100 px-1.5 py-1.5">
+                            <div className="text-xs text-zinc-500">Case of 6</div>
+                            <div className="font-bold text-zinc-900">{matchedItem?.rrp_6 ? `$${matchedItem.rrp_6}` : '—'}</div>
+                          </div>
+                          <div className="bg-white rounded-md border border-amber-100 px-1.5 py-1.5">
+                            <div className="text-xs text-zinc-500">Case of 12</div>
+                            <div className="font-bold text-zinc-900">{matchedItem?.rrp_12 ? `$${matchedItem.rrp_12}` : '—'}</div>
+                          </div>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-2 text-center">
                         {matchedItem?.special && (
                           <div className="bg-white rounded-md border border-green-100 px-2 py-1.5">
                             <div className="text-xs text-zinc-500">Special</div>
