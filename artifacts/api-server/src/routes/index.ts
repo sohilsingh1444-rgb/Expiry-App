@@ -5,6 +5,7 @@ import adminRouter from "./admin";
 import emailRouter from "./email";
 import barcodeMasterRouter from "./barcodeMaster";
 import masterDataRouter from "./masterData";
+import storePortalRouter from "./storePortal";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(adminRouter);
 router.use(emailRouter);
 router.use(barcodeMasterRouter);
 router.use(masterDataRouter);
+router.use(storePortalRouter);
 
 export default router;
