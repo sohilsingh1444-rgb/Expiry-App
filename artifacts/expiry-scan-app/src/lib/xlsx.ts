@@ -66,8 +66,9 @@ async function readWorksheetAsAoa(file: File): Promise<any[][]> {
 }
 
 export async function parseBarcodeMaster(file: File): Promise<any[]> {
-  const aoa = await readWorksheetAsAoa(file);
-  if (aoa.length < 2) return [];
+  let aoa: any[][];
+  try { aoa = await readWorksheetAsAoa(file); } catch { return []; }
+  if (!Array.isArray(aoa) || aoa.length < 2 || !Array.isArray(aoa[0])) return [];
 
   let regionRowIdx = -1;
   for (let i = 0; i < Math.min(aoa.length, 10); i++) {
@@ -127,8 +128,9 @@ export async function parseBarcodeMaster(file: File): Promise<any[]> {
 // Item Description, Unit of Measure Code, Unit Price Including VAT,
 // Starting Date, Ending Date
 export async function parseRrpFile(file: File): Promise<any[]> {
-  const aoa = await readWorksheetAsAoa(file);
-  if (aoa.length < 2) return [];
+  let aoa: any[][];
+  try { aoa = await readWorksheetAsAoa(file); } catch { return []; }
+  if (!Array.isArray(aoa) || aoa.length < 2 || !Array.isArray(aoa[0])) return [];
   const headers = aoa[0].map((c: any) => String(c ?? '').trim());
   const result: any[] = [];
   for (let r = 1; r < aoa.length; r++) {
@@ -227,8 +229,9 @@ export function buildRrpMap(rows: any[]): {
 // Standard Price Including VAT, Standard Price, Deal Price, Disc., Price Group,
 // Priority, Unit of Measure, Disc. Type, Discount Amount, Offer Price, etc.
 export async function parseSpecialsFile(file: File): Promise<any[]> {
-  const aoa = await readWorksheetAsAoa(file);
-  if (aoa.length < 2) return [];
+  let aoa: any[][];
+  try { aoa = await readWorksheetAsAoa(file); } catch { return []; }
+  if (!Array.isArray(aoa) || aoa.length < 2 || !Array.isArray(aoa[0])) return [];
   const headers = aoa[0].map((c: any) => String(c ?? '').trim());
   const result: any[] = [];
   for (let r = 1; r < aoa.length; r++) {
@@ -371,8 +374,9 @@ export function buildSpecialsMap(rows: any[]): {
 }
 
 export async function parseSohFile(file: File): Promise<any[]> {
-  const aoa = await readWorksheetAsAoa(file);
-  if (aoa.length < 2) return [];
+  let aoa: any[][];
+  try { aoa = await readWorksheetAsAoa(file); } catch { return []; }
+  if (!Array.isArray(aoa) || aoa.length < 2 || !Array.isArray(aoa[0])) return [];
   const headers = aoa[0].map((c: any) => String(c ?? ''));
   const result: any[] = [];
   for (let r = 1; r < aoa.length; r++) {

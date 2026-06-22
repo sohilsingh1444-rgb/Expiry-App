@@ -22,11 +22,22 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   render() {
     if (this.state.error) {
       return (
-        <div style={{ padding: "2rem", fontFamily: "monospace", color: "#b91c1c", background: "#fef2f2", borderRadius: 8, margin: "2rem" }}>
-          <strong>App Error:</strong>
-          <br />
-          {this.state.error.message}
-          <pre style={{ fontSize: 12, marginTop: 8, whiteSpace: "pre-wrap" }}>{this.state.error.stack}</pre>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", padding: "2rem", fontFamily: "sans-serif", background: "#f9fafb" }}>
+          <div style={{ background: "#fff", border: "1px solid #fca5a5", borderRadius: 12, padding: "2rem", maxWidth: 420, width: "100%", textAlign: "center", boxShadow: "0 2px 16px rgba(0,0,0,0.07)" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+            <h2 style={{ color: "#b91c1c", marginBottom: 8, fontSize: 18 }}>Something went wrong</h2>
+            <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 20 }}>The app encountered an unexpected error. Please reload to continue.</p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{ background: "#f97316", color: "#fff", border: "none", borderRadius: 8, padding: "10px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer" }}
+            >
+              Reload App
+            </button>
+            <details style={{ marginTop: 16, textAlign: "left" }}>
+              <summary style={{ color: "#9ca3af", fontSize: 12, cursor: "pointer" }}>Error details</summary>
+              <pre style={{ fontSize: 11, color: "#6b7280", whiteSpace: "pre-wrap", marginTop: 8, overflowX: "auto" }}>{this.state.error.message}</pre>
+            </details>
+          </div>
         </div>
       );
     }

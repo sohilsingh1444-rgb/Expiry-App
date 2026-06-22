@@ -66,16 +66,18 @@ export default function ItUploadPage() {
   }
 
   async function loadMeta() {
-    const [bmRes, rrpRes, specRes, sohRes] = await Promise.all([
-      fetch(apiUrl("/barcode-master/meta")),
-      fetch(apiUrl("/rrp-data/meta")),
-      fetch(apiUrl("/specials-data/meta")),
-      fetch(apiUrl("/soh-data/meta")),
-    ]);
-    if (bmRes.ok) setBmMeta(await bmRes.json());
-    if (rrpRes.ok) setRrpMeta(await rrpRes.json());
-    if (specRes.ok) setSpecialsMeta(await specRes.json());
-    if (sohRes.ok) setSohMeta(await sohRes.json());
+    try {
+      const [bmRes, rrpRes, specRes, sohRes] = await Promise.all([
+        fetch(apiUrl("/barcode-master/meta")),
+        fetch(apiUrl("/rrp-data/meta")),
+        fetch(apiUrl("/specials-data/meta")),
+        fetch(apiUrl("/soh-data/meta")),
+      ]);
+      if (bmRes.ok) setBmMeta(await bmRes.json());
+      if (rrpRes.ok) setRrpMeta(await rrpRes.json());
+      if (specRes.ok) setSpecialsMeta(await specRes.json());
+      if (sohRes.ok) setSohMeta(await sohRes.json());
+    } catch {}
   }
 
   async function handleLogin(e: React.FormEvent) {

@@ -438,8 +438,8 @@ export default function Home() {
 
     if (!isOnline) {
       // Queue locally and add optimistic entry to UI
-      await enqueueOfflineScan(scanPayload as Record<string, unknown>);
-      await refreshPendingCount();
+      try { await enqueueOfflineScan(scanPayload as Record<string, unknown>); } catch {}
+      try { await refreshPendingCount(); } catch {}
 
       const expiryDate = new Date(String(scanPayload.expiryDate));
       const msPerDay = 1000 * 60 * 60 * 24;

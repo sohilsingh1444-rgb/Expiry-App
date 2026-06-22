@@ -160,10 +160,6 @@ export function useBarcodeMaster() {
           fetch(`${getApiBase()}/api/specials-data/meta`),
         ]);
 
-        const hasBm = metaRes.ok && (() => {
-          const m = metaRes.json(); return m;
-        });
-
         // Fetch barcode master if available
         let map = new Map<string, BarcodeMasterRow>();
         if (metaRes.ok) {
