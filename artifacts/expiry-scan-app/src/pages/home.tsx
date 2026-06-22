@@ -69,8 +69,11 @@ const scanSchema = z.object({
   expiryDate: z.string().optional(),
   remarks: z.string().optional(),
   wrongRrp: z.boolean().default(false),
+  wrongRrpQty: z.coerce.number().optional(),
   missingSpecialTicket: z.boolean().default(false),
+  missingSpecialQty: z.coerce.number().optional(),
   notOnDisplay: z.boolean().default(false),
+  notOnDisplayQty: z.coerce.number().optional(),
 }).superRefine((data, ctx) => {
   const hasComplianceFlag = data.wrongRrp || data.missingSpecialTicket || data.notOnDisplay;
   if (!hasComplianceFlag && !data.expiryDate) {
@@ -200,14 +203,20 @@ export default function Home() {
       expiryDate: "",
       remarks: "",
       wrongRrp: false,
+      wrongRrpQty: undefined,
       missingSpecialTicket: false,
+      missingSpecialQty: undefined,
       notOnDisplay: false,
+      notOnDisplayQty: undefined,
     },
   });
 
   const watchBarcode = scanForm.watch("barcode");
   const watchItemNumber = scanForm.watch("itemNumber");
   const watchExpiryDate = scanForm.watch("expiryDate");
+  const watchWrongRrp = scanForm.watch("wrongRrp");
+  const watchMissingSpecial = scanForm.watch("missingSpecialTicket");
+  const watchNotOnDisplay = scanForm.watch("notOnDisplay");
 
 
   useEffect(() => {
@@ -336,7 +345,7 @@ export default function Home() {
           Array.isArray(old) ? [optimisticScan, ...old] : [optimisticScan]
         );
 
-        scanForm.reset({ barcode: "", itemNumber: "", description: "", qty: "" as unknown as number, expiryDate: "", remarks: "", wrongRrp: false, missingSpecialTicket: false, notOnDisplay: false });
+        scanForm.reset({ barcode: "", itemNumber: "", description: "", qty: "" as unknown as number, expiryDate: "", remarks: "", wrongRrp: false, wrongRrpQty: undefined, missingSpecialTicket: false, missingSpecialQty: undefined, notOnDisplay: false, notOnDisplayQty: undefined });
         setTimeout(() => { barcodeInputRef.current?.focus(); }, 50);
         toast({ title: "Scan saved", description: "Item recorded." });
 
@@ -426,14 +435,19 @@ export default function Home() {
       description: values.description,
       qty: values.qty,
       expiryDate: values.expiryDate || setupData.scanDate,
-      remarks: values.remarks,
+      remarks: [
+        values.remarks,
+        values.wrongRrp && values.wrongRrpQty != null ? `Wrong RRP Qty: ${values.wrongRrpQty}` : null,
+        values.missingSpecialTicket && values.missingSpecialQty != null ? `Missing Ticket Qty: ${values.missingSpecialQty}` : null,
+        values.notOnDisplay && values.notOnDisplayQty != null ? `Not On Display Qty: ${values.notOnDisplayQty}` : null,
+      ].filter(Boolean).join(" | ") || undefined,
       ...(matchedItem?.rrp ? { rrp: parseFloat(String(matchedItem.rrp)) } : {}),
       ...(matchedItem?.special ? { specialPrice: parseFloat(String(matchedItem.special)) } : {}),
       ...(lookupSoh(barcodeStr, values.itemNumber, storeIdentifiers, storeRegion) != null ? { systemSoh: lookupSoh(barcodeStr, values.itemNumber, storeIdentifiers, storeRegion)! } : {}),
       wrongRrp: values.wrongRrp,
       missingSpecialTicket: values.missingSpecialTicket,
       notOnDisplay: values.notOnDisplay,
-      ...(values.notOnDisplay ? { bulkPullQty: values.qty } : {}),
+      ...(values.notOnDisplay ? { bulkPullQty: values.notOnDisplayQty ?? values.qty } : {}),
     };
 
     if (!isOnline) {
@@ -451,7 +465,7 @@ export default function Home() {
         Array.isArray(old) ? [optimistic, ...old] : [optimistic]
       );
 
-      scanForm.reset({ barcode: "", itemNumber: "", description: "", qty: "" as unknown as number, expiryDate: "", remarks: "", wrongRrp: false, missingSpecialTicket: false, notOnDisplay: false });
+      scanForm.reset({ barcode: "", itemNumber: "", description: "", qty: "" as unknown as number, expiryDate: "", remarks: "", wrongRrp: false, wrongRrpQty: undefined, missingSpecialTicket: false, missingSpecialQty: undefined, notOnDisplay: false, notOnDisplayQty: undefined });
       setTimeout(() => { barcodeInputRef.current?.focus(); }, 50);
       toast({ title: "Saved offline", description: "Will sync when connection is restored." });
       return;
@@ -1013,51 +1027,126 @@ export default function Home() {
                   {/* Compliance flags */}
                   <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 space-y-3">
                     <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Compliance Flags</div>
+                    {/* Wrong RRP */}
                     <FormField
                       control={scanForm.control}
                       name="wrongRrp"
                       render={({ field }) => (
-                        <FormItem className="flex items-center gap-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              className="data-[state=checked]:bg-red-500 data-[state=checked]:border-red-500"
-                            />
-                          </FormControl>
-                          <FormLabel className="text-sm font-medium text-zinc-800 cursor-pointer">Wrong RRP on shelf</FormLabel>
+                        <FormItem className="space-y-0">
+                          <div className="flex items-center gap-3">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={(v) => { field.onChange(v); if (!v) scanForm.setValue("wrongRrpQty", undefined); }}
+                                className="data-[state=checked]:bg-red-500 data-[state=checked]:border-red-500"
+                              />
+                            </FormControl>
+                            <FormLabel className="text-sm font-medium text-zinc-800 cursor-pointer flex-1">Wrong RRP on shelf</FormLabel>
+                            {watchWrongRrp && (
+                              <FormField
+                                control={scanForm.control}
+                                name="wrongRrpQty"
+                                render={({ field: qf }) => (
+                                  <FormItem className="space-y-0 flex items-center gap-1">
+                                    <FormLabel className="text-xs text-zinc-500 whitespace-nowrap">Qty:</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        placeholder="0"
+                                        className="h-7 w-16 text-xs px-2 border-red-200 focus-visible:ring-red-400"
+                                        value={qf.value ?? ""}
+                                        onChange={qf.onChange}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            )}
+                          </div>
                         </FormItem>
                       )}
                     />
+                    {/* Missing special ticket */}
                     <FormField
                       control={scanForm.control}
                       name="missingSpecialTicket"
                       render={({ field }) => (
-                        <FormItem className="flex items-center gap-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              className="data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
-                            />
-                          </FormControl>
-                          <FormLabel className="text-sm font-medium text-zinc-800 cursor-pointer">Missing special ticket</FormLabel>
+                        <FormItem className="space-y-0">
+                          <div className="flex items-center gap-3">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={(v) => { field.onChange(v); if (!v) scanForm.setValue("missingSpecialQty", undefined); }}
+                                className="data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
+                              />
+                            </FormControl>
+                            <FormLabel className="text-sm font-medium text-zinc-800 cursor-pointer flex-1">Missing special ticket</FormLabel>
+                            {watchMissingSpecial && (
+                              <FormField
+                                control={scanForm.control}
+                                name="missingSpecialQty"
+                                render={({ field: qf }) => (
+                                  <FormItem className="space-y-0 flex items-center gap-1">
+                                    <FormLabel className="text-xs text-zinc-500 whitespace-nowrap">Qty:</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        placeholder="0"
+                                        className="h-7 w-16 text-xs px-2 border-orange-200 focus-visible:ring-orange-400"
+                                        value={qf.value ?? ""}
+                                        onChange={qf.onChange}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            )}
+                          </div>
                         </FormItem>
                       )}
                     />
+                    {/* Not on display */}
                     <FormField
                       control={scanForm.control}
                       name="notOnDisplay"
                       render={({ field }) => (
-                        <FormItem className="flex items-center gap-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              className="data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
-                            />
-                          </FormControl>
-                          <FormLabel className="text-sm font-medium text-zinc-800 cursor-pointer">Not on display (system SOH exists)</FormLabel>
+                        <FormItem className="space-y-0">
+                          <div className="flex items-center gap-3">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={(v) => { field.onChange(v); if (!v) scanForm.setValue("notOnDisplayQty", undefined); }}
+                                className="data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                              />
+                            </FormControl>
+                            <FormLabel className="text-sm font-medium text-zinc-800 cursor-pointer flex-1">Not on display (system SOH exists)</FormLabel>
+                            {watchNotOnDisplay && (
+                              <FormField
+                                control={scanForm.control}
+                                name="notOnDisplayQty"
+                                render={({ field: qf }) => (
+                                  <FormItem className="space-y-0 flex items-center gap-1">
+                                    <FormLabel className="text-xs text-zinc-500 whitespace-nowrap">Qty:</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        placeholder="0"
+                                        className="h-7 w-16 text-xs px-2 border-purple-200 focus-visible:ring-purple-400"
+                                        value={qf.value ?? ""}
+                                        onChange={qf.onChange}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            )}
+                          </div>
                         </FormItem>
                       )}
                     />
