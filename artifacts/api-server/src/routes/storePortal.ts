@@ -107,28 +107,25 @@ router.post("/store-portal/upload-soh", async (req, res): Promise<void> => {
   const storeCode = requireStoreAuth(req, res);
   if (!storeCode) return;
 
-  const { rows } = req.body as {
-    rows?: Array<{ barcode?: string; itemNumber?: string; qty?: number }>;
+  const { byBarcode, byItem, count } = req.body as {
+    byBarcode?: Record<string, number>;
+    byItem?: Record<string, number>;
+    count?: number;
   };
-  if (!Array.isArray(rows) || rows.length === 0) {
-    res.status(400).json({ error: "rows array is required" });
+  if (!byBarcode && !byItem) {
+    res.status(400).json({ error: "byBarcode or byItem is required" });
     return;
   }
 
-  const byBarcode: Record<string, number> = {};
-  const byItem: Record<string, number> = {};
-  for (const row of rows) {
-    if (row.qty == null || row.qty <= 0) continue;
-    if (row.barcode) byBarcode[row.barcode] = (byBarcode[row.barcode] ?? 0) + row.qty;
-    if (row.itemNumber) byItem[row.itemNumber] = (byItem[row.itemNumber] ?? 0) + row.qty;
-  }
-
   const now = new Date().toISOString();
-  const count = rows.length;
+  const itemCount = count ?? Math.max(
+    Object.keys(byBarcode ?? {}).length,
+    Object.keys(byItem ?? {}).length,
+  );
 
-  await setSetting(`soh_store_${storeCode}_json`, JSON.stringify({ byBarcode, byItem }));
+  await setSetting(`soh_store_${storeCode}_json`, JSON.stringify({ byBarcode: byBarcode ?? {}, byItem: byItem ?? {} }));
   await setSetting(`soh_store_${storeCode}_uploaded_at`, now);
-  await setSetting(`soh_store_${storeCode}_count`, String(count));
+  await setSetting(`soh_store_${storeCode}_count`, String(itemCount));
 
   const allSettings = await db
     .select()
@@ -142,7 +139,7 @@ router.post("/store-portal/upload-soh", async (req, res): Promise<void> => {
   }
   await setSetting("soh_by_store_json", JSON.stringify(byStore));
 
-  res.json({ ok: true, uploadedAt: now, count });
+  res.json({ ok: true, uploadedAt: now, count: itemCount });
 });
 
 router.post("/store-portal/change-password", async (req, res): Promise<void> => {

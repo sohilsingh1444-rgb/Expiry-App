@@ -133,14 +133,9 @@ export default function StorePortalPage() {
         setUploading(false);
         return;
       }
-      const { byBarcode, byItem } = buildSohMaps(raw);
-      const rows = raw.map((r: any) => ({
-        barcode: r["Barcode"] ?? r["barcode"] ?? r["EAN"] ?? r["ean"] ?? "",
-        itemNumber: r["Item No."] ?? r["Item No"] ?? r["item_number"] ?? r["No."] ?? "",
-        qty: Number(r["Qty"] ?? r["qty"] ?? r["SOH"] ?? r["soh"] ?? r["Quantity"] ?? r["quantity"] ?? 0),
-      })).filter((r: any) => r.qty > 0 && (r.barcode || r.itemNumber));
+      const { byBarcode, byItem, count } = buildSohMaps(raw);
 
-      if (rows.length === 0) {
+      if (count === 0 || (Object.keys(byBarcode).length === 0 && Object.keys(byItem).length === 0)) {
         toast({ title: "No valid rows", description: "Could not find qty/barcode data in the file.", variant: "destructive" });
         setUploading(false);
         return;
@@ -149,7 +144,7 @@ export default function StorePortalPage() {
       const r2 = await fetch(apiUrl("/store-portal/upload-soh"), {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-store-token": session.token },
-        body: JSON.stringify({ rows }),
+        body: JSON.stringify({ byBarcode, byItem, count }),
       });
       const result = await r2.json();
       if (!r2.ok) {
