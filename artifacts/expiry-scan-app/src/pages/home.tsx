@@ -249,14 +249,12 @@ export default function Home() {
       const match = lookupBarcode(watchBarcode, storeRegion, scanGetValues("itemNumber"));
       if (match) {
         setMatchedItem(match);
-        if (!scanGetValues("itemNumber")) {
-          scanSetValue("itemNumber", match.itemNumber);
-        }
-        if (!scanGetValues("description")) {
-          scanSetValue("description", match.description);
-        }
+        scanSetValue("itemNumber", match.itemNumber);
+        scanSetValue("description", match.description);
       } else {
         setMatchedItem(null);
+        scanSetValue("itemNumber", "");
+        scanSetValue("description", "");
       }
     } else {
       setMatchedItem(null);
