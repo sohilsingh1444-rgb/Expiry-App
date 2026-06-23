@@ -536,6 +536,11 @@ export default function Home() {
         toast({ title: "No RRP data found", description: "Check that the file has Sales Code (CR/NR/WR), Item No., and price columns.", variant: "destructive" });
       } else {
         saveRrpData(byItem);
+        fetch(`${API_BASE}/api/rrp-data`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ byItem, count }),
+        }).catch(() => {});
         toast({ title: "RRP Data Uploaded", description: `Merged ${count.toLocaleString()} items into barcode lookup.` });
       }
     } catch {
@@ -558,6 +563,20 @@ export default function Home() {
       } else {
         if (specialsItems > 0) saveSpecialsData(byItem);
         if (rrpItems > 0) saveRrpData(rrpByItem);
+        if (specialsItems > 0) {
+          fetch(`${API_BASE}/api/specials-data`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ byItem, count: specialsItems }),
+          }).catch(() => {});
+        }
+        if (rrpItems > 0) {
+          fetch(`${API_BASE}/api/rrp-data`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ byItem: rrpByItem, count: rrpItems }),
+          }).catch(() => {});
+        }
         const parts = [];
         if (specialsItems > 0) parts.push(`${specialsItems.toLocaleString()} deal prices`);
         if (rrpItems > 0) parts.push(`${rrpItems.toLocaleString()} RRP prices`);

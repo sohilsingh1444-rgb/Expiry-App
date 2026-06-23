@@ -135,6 +135,18 @@ router.get("/rrp-data", async (_req, res): Promise<void> => {
   res.send(compressed);
 });
 
+// Public (no-auth) route — RRP data is non-sensitive product pricing
+router.post("/rrp-data", async (req, res): Promise<void> => {
+  const { byItem, count } = req.body as { byItem?: Record<string, unknown>; count?: number };
+  if (!byItem || Object.keys(byItem).length === 0) { res.status(400).json({ error: "byItem is required" }); return; }
+  const now = new Date().toISOString();
+  const itemCount = count ?? Object.keys(byItem).length;
+  await setSetting("rrp_by_item_json", JSON.stringify(byItem));
+  await setSetting("rrp_uploaded_at", now);
+  await setSetting("rrp_count", String(itemCount));
+  res.json({ ok: true, uploadedAt: now, count: itemCount });
+});
+
 router.post("/admin/rrp-data", async (req, res): Promise<void> => {
   if (!checkAdminPassword(req, res)) return;
   const { byItem, count } = req.body as { byItem?: Record<string, unknown>; count?: number };
@@ -180,6 +192,18 @@ router.get("/specials-data", async (_req, res): Promise<void> => {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Vary", "Accept-Encoding");
   res.send(compressed);
+});
+
+// Public (no-auth) route — Specials data is non-sensitive product pricing
+router.post("/specials-data", async (req, res): Promise<void> => {
+  const { byItem, count } = req.body as { byItem?: Record<string, unknown>; count?: number };
+  if (!byItem || Object.keys(byItem).length === 0) { res.status(400).json({ error: "byItem is required" }); return; }
+  const now = new Date().toISOString();
+  const itemCount = count ?? Object.keys(byItem).length;
+  await setSetting("specials_by_item_json", JSON.stringify(byItem));
+  await setSetting("specials_uploaded_at", now);
+  await setSetting("specials_count", String(itemCount));
+  res.json({ ok: true, uploadedAt: now, count: itemCount });
 });
 
 router.post("/admin/specials-data", async (req, res): Promise<void> => {
