@@ -46,7 +46,7 @@ import { useToast } from "@/hooks/use-toast";
 import { AlertCircle, CheckCircle2, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight, Database, ChevronsUpDown, Check, Camera, Tag, Percent } from "lucide-react";
 import { CameraScanner } from "@/components/camera-scanner";
 import { parseBarcodeMaster, parseSohFile, parseRrpFile, buildRrpMap, parseSpecialsFile, buildSpecialsMap, exportToExcel } from "@/lib/xlsx";
-import { useBarcodeMaster } from "@/hooks/use-barcode-master";
+import { useBarcodeMaster, buildBarcodeMaps } from "@/hooks/use-barcode-master";
 import { useSohData } from "@/hooks/use-soh-data";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -493,22 +493,55 @@ export default function Home() {
     createScan.mutate({ data: scanPayload as any });
   }, [sessionId, setupData, isOnline, matchedItem, lookupSoh, enqueueOfflineScan, refreshPendingCount, queryClient, scanForm, barcodeInputRef, toast, createScan]);
 
+  async function gzipBase64Home(obj: unknown): Promise<string> {
+    const jsonBytes = new TextEncoder().encode(JSON.stringify(obj));
+    const cs = new CompressionStream("gzip");
+    const writer = cs.writable.getWriter();
+    writer.write(jsonBytes);
+    writer.close();
+    const chunks: Uint8Array[] = [];
+    const reader = cs.readable.getReader();
+    while (true) { const { done, value } = await reader.read(); if (done) break; chunks.push(value as Uint8Array); }
+    const all = new Uint8Array(chunks.reduce((acc, c) => acc + c.length, 0));
+    let off = 0;
+    for (const c of chunks) { all.set(c, off); off += c.length; }
+    // Chunked btoa to avoid stack overflow on large files
+    let binary = "";
+    const chunk = 65536;
+    for (let i = 0; i < all.length; i += chunk) {
+      binary += String.fromCharCode(...all.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
       const data = await parseBarcodeMaster(file);
+      if (!data.length) {
+        toast({ title: "Empty file", description: "No rows found in the file.", variant: "destructive" });
+        e.target.value = "";
+        return;
+      }
+      const { map, count } = buildBarcodeMaps(data);
+      if (Object.keys(map).length === 0) {
+        toast({ title: "No barcodes found", description: "Could not detect a barcode column. Check the file format.", variant: "destructive" });
+        e.target.value = "";
+        return;
+      }
       saveMasterData(data);
-      toast({
-        title: "Master Data Uploaded",
-        description: `Loaded ${data.length} rows successfully.`,
-      });
-    } catch (err) {
-      toast({
-        title: "Upload Failed",
-        description: "Failed to parse the Excel file.",
-        variant: "destructive",
-      });
+      toast({ title: "Master Data Uploaded", description: `Loaded ${count.toLocaleString()} items.` });
+      // Persist to server in the background so it auto-loads on next open
+      gzipBase64Home({ map, count }).then(compressed =>
+        fetch(`${API_BASE}/api/barcode-master`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ compressed }),
+        })
+      ).catch(() => {});
+    } catch {
+      toast({ title: "Upload Failed", description: "Failed to parse the Excel file.", variant: "destructive" });
     }
     e.target.value = "";
   };

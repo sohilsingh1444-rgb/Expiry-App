@@ -56,6 +56,33 @@ router.get("/barcode-master", async (_req, res): Promise<void> => {
   res.send(compressed);
 });
 
+// Public (no-auth) barcode-master upload — accepts same compressed format as admin route
+router.post("/barcode-master", async (req, res): Promise<void> => {
+  const body = req.body as { compressed?: string; map?: Record<string, unknown>; count?: number };
+  let map: Record<string, unknown>;
+  let count: number | undefined;
+  if (body.compressed) {
+    try {
+      const buf = Buffer.from(body.compressed, "base64");
+      const parsed = JSON.parse(gunzipSync(buf).toString()) as { map: Record<string, unknown>; count?: number };
+      map = parsed.map; count = parsed.count;
+    } catch { res.status(400).json({ error: "Failed to decompress payload" }); return; }
+  } else { map = body.map ?? {}; count = body.count; }
+  if (!map || typeof map !== "object" || Object.keys(map).length === 0) { res.status(400).json({ error: "map is required" }); return; }
+  const byItem: Record<string, unknown> = {};
+  for (const entry of Object.values(map)) {
+    const e = entry as { itemNumber?: string; rrp?: string };
+    if (e.itemNumber) { const ex = byItem[e.itemNumber] as { rrp?: string } | undefined; if (!ex || (e.rrp && !ex.rrp)) byItem[e.itemNumber] = entry; }
+  }
+  const now = new Date().toISOString();
+  const itemCount = count ?? Object.keys(map).length;
+  await setSetting("bm_map_json", JSON.stringify(map));
+  await setSetting("bm_by_item_json", JSON.stringify(byItem));
+  await setSetting("bm_uploaded_at", now);
+  await setSetting("bm_count", String(itemCount));
+  res.json({ ok: true, uploadedAt: now, count: itemCount });
+});
+
 router.post("/admin/barcode-master", async (req, res): Promise<void> => {
   if (!checkAdminPassword(req, res)) return;
   const body = req.body as { compressed?: string; map?: Record<string, unknown>; count?: number };
