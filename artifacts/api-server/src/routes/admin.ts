@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, sql } from "drizzle-orm";
+import { eq, like, sql } from "drizzle-orm";
 import { db, expiryScansTable, appSettingsTable, storesTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -85,16 +85,18 @@ router.post("/admin/it-verify", (req, res): void => {
 router.get("/admin/settings", async (_req, res): Promise<void> => {
   const urgentDays = await getSetting("urgent_days", String(DEFAULT_URGENT_DAYS));
   const nearExpiryDays = await getSetting("near_expiry_days", String(DEFAULT_NEAR_EXPIRY_DAYS));
+  const appName = await getSetting("app_name", "Expiry Tracker");
   res.json({
     urgentDays: Number(urgentDays),
     nearExpiryDays: Number(nearExpiryDays),
+    appName,
   });
 });
 
 router.put("/admin/settings", async (req, res): Promise<void> => {
   if (!checkAdminPassword(req, res)) return;
 
-  const { urgentDays, nearExpiryDays } = req.body as { urgentDays?: number; nearExpiryDays?: number };
+  const { urgentDays, nearExpiryDays, appName } = req.body as { urgentDays?: number; nearExpiryDays?: number; appName?: string };
 
   if (
     typeof urgentDays !== "number" ||
@@ -116,7 +118,42 @@ router.put("/admin/settings", async (req, res): Promise<void> => {
     .values({ key: "near_expiry_days", value: String(nearExpiryDays) })
     .onConflictDoUpdate({ target: appSettingsTable.key, set: { value: String(nearExpiryDays), updatedAt: new Date() } });
 
-  res.json({ urgentDays, nearExpiryDays });
+  if (typeof appName === "string" && appName.trim()) {
+    await db
+      .insert(appSettingsTable)
+      .values({ key: "app_name", value: appName.trim() })
+      .onConflictDoUpdate({ target: appSettingsTable.key, set: { value: appName.trim(), updatedAt: new Date() } });
+  }
+
+  const savedAppName = await getSetting("app_name", "Expiry Tracker");
+  res.json({ urgentDays, nearExpiryDays, appName: savedAppName });
+});
+
+router.get("/admin/store-portal/soh-status", async (req, res): Promise<void> => {
+  if (!checkAdminPassword(req, res)) return;
+
+  const uploadedAtRows = await db
+    .select()
+    .from(appSettingsTable)
+    .where(like(appSettingsTable.key, "soh_store_%_uploaded_at"));
+
+  const countRows = await db
+    .select()
+    .from(appSettingsTable)
+    .where(like(appSettingsTable.key, "soh_store_%_count"));
+
+  const countMap: Record<string, number> = {};
+  for (const row of countRows) {
+    const code = row.key.replace("soh_store_", "").replace("_count", "");
+    countMap[code] = parseInt(row.value) || 0;
+  }
+
+  const result = uploadedAtRows.map(row => {
+    const code = row.key.replace("soh_store_", "").replace("_uploaded_at", "");
+    return { code, uploadedAt: row.value, count: countMap[code] ?? 0 };
+  }).sort((a, b) => a.code.localeCompare(b.code));
+
+  res.json(result);
 });
 
 router.get("/admin/sessions", async (req, res): Promise<void> => {

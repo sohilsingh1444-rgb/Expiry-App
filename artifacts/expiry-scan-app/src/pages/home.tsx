@@ -170,6 +170,7 @@ export default function Home() {
   const [showNonExpiredOnly, setShowNonExpiredOnly] = useState(false);
   const [todayDateKey, setTodayDateKey] = useState(getTodayDateKey);
   const [thresholds, setThresholds] = useState({ urgentDays: 2, nearExpiryDays: 15 });
+  const [appName, setAppName] = useState("Expiry Tracker");
   const [matchedItem, setMatchedItem] = useState<BarcodeMasterRow | null>(null);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [storeComboOpen, setStoreComboOpen] = useState(false);
@@ -252,6 +253,9 @@ export default function Home() {
       .then((data) => {
         if (typeof data.urgentDays === "number" && typeof data.nearExpiryDays === "number") {
           setThresholds({ urgentDays: data.urgentDays, nearExpiryDays: data.nearExpiryDays });
+        }
+        if (typeof data.appName === "string" && data.appName.trim()) {
+          setAppName(data.appName.trim());
         }
       })
       .catch(() => {});
@@ -734,7 +738,7 @@ export default function Home() {
           <CardHeader className="space-y-1 bg-zinc-950 text-zinc-50 rounded-t-xl pb-6">
             <div className="flex items-center gap-2 mb-2">
               <ScanLine className="w-6 h-6 text-amber-500" />
-              <CardTitle className="text-2xl font-bold tracking-tight">Expiry Tracker</CardTitle>
+              <CardTitle className="text-2xl font-bold tracking-tight">{appName}</CardTitle>
             </div>
             <CardDescription className="text-zinc-400">
               Start a new scanning session for your location.
@@ -842,7 +846,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ScanLine className="w-5 h-5 text-amber-500" />
-            <h1 className="text-xl font-bold tracking-tight hidden sm:block">Expiry Tracker</h1>
+            <h1 className="text-xl font-bold tracking-tight hidden sm:block">{appName}</h1>
           </div>
           <div className="flex items-center gap-4 text-sm font-medium text-zinc-300">
             <div className="flex items-center gap-1.5 bg-zinc-900 px-3 py-1.5 rounded-md border border-zinc-800">

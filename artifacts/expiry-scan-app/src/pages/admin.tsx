@@ -35,7 +35,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Trash2, Settings, LogOut, ShieldCheck, Store, Plus, Pencil, X, Upload, DatabaseZap } from "lucide-react";
+import { Trash2, Settings, LogOut, ShieldCheck, Store, Plus, Pencil, X, Upload, DatabaseZap, RefreshCw, Type } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { getApiBase } from "@/lib/api-base";
 
@@ -55,6 +55,13 @@ type Session = {
 type AppSettings = {
   urgentDays: number;
   nearExpiryDays: number;
+  appName: string;
+};
+
+type StoreSohStatus = {
+  code: string;
+  uploadedAt: string;
+  count: number;
 };
 
 type StoreRow = {
@@ -74,10 +81,14 @@ export default function AdminPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
 
-  const [settings, setSettings] = useState<AppSettings>({ urgentDays: 2, nearExpiryDays: 15 });
+  const [settings, setSettings] = useState<AppSettings>({ urgentDays: 2, nearExpiryDays: 15, appName: "Expiry Tracker" });
   const [urgentInput, setUrgentInput] = useState("2");
   const [nearExpiryInput, setNearExpiryInput] = useState("15");
+  const [appNameInput, setAppNameInput] = useState("Expiry Tracker");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  const [storeSohStatus, setStoreSohStatus] = useState<StoreSohStatus[]>([]);
+  const [isLoadingSohStatus, setIsLoadingSohStatus] = useState(false);
 
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [isLoadingStores, setIsLoadingStores] = useState(false);
@@ -105,6 +116,15 @@ export default function AdminPage() {
   const storedPassword = () => sessionStorage.getItem("admin_pw") ?? "";
 
   useEffect(() => {
+    fetch(apiUrl("/admin/settings"))
+      .then(r => r.json())
+      .then(data => {
+        if (typeof data.appName === "string" && data.appName.trim()) {
+          setSettings(prev => ({ ...prev, appName: data.appName }));
+          setAppNameInput(data.appName);
+        }
+      })
+      .catch(() => {});
     const saved = sessionStorage.getItem("admin_pw");
     if (saved) {
       verifyAndLoad(saved);
@@ -128,7 +148,7 @@ export default function AdminPage() {
       }
       sessionStorage.setItem("admin_pw", pw);
       setAuthed(true);
-      await Promise.all([loadSessions(pw), loadSettings(), loadStores(pw), loadMasterMeta()]);
+      await Promise.all([loadSessions(pw), loadSettings(), loadStores(pw), loadMasterMeta(), loadStoreSohStatus(pw)]);
     } catch {
       setAuthError("Connection error. Please try again.");
     } finally {
@@ -158,8 +178,23 @@ export default function AdminPage() {
         setSettings(data);
         setUrgentInput(String(data.urgentDays));
         setNearExpiryInput(String(data.nearExpiryDays));
+        setAppNameInput(data.appName ?? "Expiry Tracker");
       }
     } catch {}
+  }
+
+  async function loadStoreSohStatus(pw: string) {
+    setIsLoadingSohStatus(true);
+    try {
+      const res = await fetch(apiUrl("/admin/store-portal/soh-status"), {
+        headers: { "x-admin-password": pw },
+      });
+      if (res.ok) {
+        setStoreSohStatus(await res.json());
+      }
+    } catch {} finally {
+      setIsLoadingSohStatus(false);
+    }
   }
 
   async function loadMasterMeta() {
@@ -446,12 +481,13 @@ export default function AdminPage() {
           "Content-Type": "application/json",
           "x-admin-password": pw,
         },
-        body: JSON.stringify({ urgentDays, nearExpiryDays }),
+        body: JSON.stringify({ urgentDays, nearExpiryDays, appName: appNameInput.trim() || "Expiry Tracker" }),
       });
       if (res.ok) {
         const data: AppSettings = await res.json();
         setSettings(data);
-        toast({ title: "Settings saved", description: `Urgent: ≤${data.urgentDays} days, Near Expiry: ≤${data.nearExpiryDays} days` });
+        setAppNameInput(data.appName ?? "Expiry Tracker");
+        toast({ title: "Settings saved", description: `App: "${data.appName}" · Urgent: ≤${data.urgentDays} d · Near Expiry: ≤${data.nearExpiryDays} d` });
       } else {
         const err = await res.json();
         toast({ title: "Error", description: err.error ?? "Failed to save settings.", variant: "destructive" });
@@ -549,7 +585,7 @@ export default function AdminPage() {
               <ShieldCheck className="h-8 w-8 text-amber-500" />
             </div>
             <CardTitle className="text-white text-xl">Admin Panel</CardTitle>
-            <CardDescription className="text-zinc-400">Expiry Tracker — Admin Access</CardDescription>
+            <CardDescription className="text-zinc-400">{settings.appName} — Admin Access</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
@@ -592,7 +628,7 @@ export default function AdminPage() {
           <ShieldCheck className="h-5 w-5 text-amber-500" />
           <div>
             <h1 className="text-lg font-semibold tracking-tight">Admin Panel</h1>
-            <p className="text-zinc-500 text-xs">Expiry Tracker</p>
+            <p className="text-zinc-500 text-xs">{settings.appName}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -611,19 +647,44 @@ export default function AdminPage() {
 
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 
-        {/* ── Expiry Thresholds ── */}
+        {/* ── App Settings ── */}
         <Card className="bg-zinc-900 border-zinc-800">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Settings className="h-4 w-4 text-amber-500" />
-              <CardTitle className="text-white text-base">Expiry Thresholds</CardTitle>
+              <CardTitle className="text-white text-base">App Settings</CardTitle>
             </div>
             <CardDescription className="text-zinc-400">
-              Current: Urgent ≤ {settings.urgentDays} days &nbsp;|&nbsp; Near Expiry ≤ {settings.nearExpiryDays} days
+              App name: <span className="text-white font-medium">{settings.appName}</span> &nbsp;·&nbsp; Urgent ≤ {settings.urgentDays} d &nbsp;·&nbsp; Near Expiry ≤ {settings.nearExpiryDays} d
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSaveSettings} className="space-y-4">
+            <form onSubmit={handleSaveSettings} className="space-y-5">
+
+              {/* App Name */}
+              <div className="rounded-lg border border-zinc-800 p-4 space-y-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <Type className="h-3.5 w-3.5 text-amber-500" />
+                  <p className="text-white font-medium text-sm">App Name</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-zinc-300 text-xs">Display name shown in the app header and setup screen</Label>
+                  <Input
+                    type="text"
+                    value={appNameInput}
+                    onChange={(e) => setAppNameInput(e.target.value)}
+                    placeholder="Expiry Tracker"
+                    className="bg-zinc-800 border-zinc-700 text-white max-w-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Expiry Thresholds */}
+              <div className="rounded-lg border border-zinc-800 p-4 space-y-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Settings className="h-3.5 w-3.5 text-amber-500" />
+                  <p className="text-white font-medium text-sm">Expiry Thresholds</p>
+                </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-zinc-300">Urgent (days left ≤ X)</Label>
@@ -648,12 +709,14 @@ export default function AdminPage() {
                   <p className="text-zinc-500 text-xs">Items expiring within this many days (but above Urgent) are Near Expiry</p>
                 </div>
               </div>
+              </div>
+
               <Button
                 type="submit"
                 className="bg-amber-600 hover:bg-amber-500 text-white"
                 disabled={isSavingSettings}
               >
-                {isSavingSettings ? "Saving..." : "Save Thresholds"}
+                {isSavingSettings ? "Saving..." : "Save Settings"}
               </Button>
             </form>
           </CardContent>
@@ -1023,6 +1086,73 @@ export default function AdminPage() {
               </div>
             </div>
 
+          </CardContent>
+        </Card>
+
+        {/* ── Store Portal SOH Uploads ── */}
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <DatabaseZap className="h-4 w-4 text-amber-500" />
+                <CardTitle className="text-white text-base">Store Portal — SOH Uploads</CardTitle>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-zinc-400 hover:text-white hover:bg-zinc-800"
+                onClick={() => loadStoreSohStatus(storedPassword())}
+                disabled={isLoadingSohStatus}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isLoadingSohStatus ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+            </div>
+            <CardDescription className="text-zinc-400">
+              {storeSohStatus.length === 0
+                ? "No stores have uploaded SOH data via the store portal yet"
+                : `${storeSohStatus.length} store${storeSohStatus.length !== 1 ? "s" : ""} have uploaded SOH data — available for auto-load on setup`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoadingSohStatus ? (
+              <p className="text-zinc-500 text-sm">Loading...</p>
+            ) : storeSohStatus.length === 0 ? (
+              <div className="rounded-lg border border-zinc-800 p-4 text-center">
+                <p className="text-zinc-500 text-sm">No SOH uploads found.</p>
+                <p className="text-zinc-600 text-xs mt-1">Stores upload SOH via the store portal on their IT device. Once uploaded, users at that store auto-load it on session setup.</p>
+              </div>
+            ) : (
+              <div className="rounded-md border border-zinc-800 overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-zinc-800 hover:bg-zinc-800 border-zinc-700">
+                      <TableHead className="text-zinc-300 w-24">Store Code</TableHead>
+                      <TableHead className="text-zinc-300">Store Name</TableHead>
+                      <TableHead className="text-zinc-300 text-right w-24">Rows</TableHead>
+                      <TableHead className="text-zinc-300 w-44">Last Uploaded</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {storeSohStatus.map((row) => {
+                      const store = stores.find(s => s.code === row.code);
+                      return (
+                        <TableRow key={row.code} className="border-zinc-800 hover:bg-zinc-800/50">
+                          <TableCell className="text-amber-400 font-mono font-semibold">{row.code}</TableCell>
+                          <TableCell className="text-white">{store?.name ?? <span className="text-zinc-500 italic">Unknown store</span>}</TableCell>
+                          <TableCell className="text-zinc-300 text-right font-mono">{row.count.toLocaleString()}</TableCell>
+                          <TableCell className="text-zinc-400 text-sm">
+                            <span className="text-emerald-400">
+                              {format(new Date(row.uploadedAt), "dd/MM/yyyy HH:mm")}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
