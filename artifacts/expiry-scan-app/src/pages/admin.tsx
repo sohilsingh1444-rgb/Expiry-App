@@ -286,7 +286,17 @@ export default function AdminPage() {
         toast({ title: "Empty file", description: "No rows found in the file.", variant: "destructive" });
         return;
       }
-      const { map, count } = buildBarcodeMaps(rows);
+      const { map, byItem, count } = buildBarcodeMaps(rows);
+      if (Object.keys(map).length === 0) {
+        const sampleCols = Object.keys(rows[0] ?? {}).slice(0, 10).join(', ') || 'none';
+        toast({
+          title: "No barcodes found",
+          description: `No barcode/EAN/UPC/PLU column recognised. Columns detected: ${sampleCols}`,
+          variant: "destructive",
+        });
+        return;
+      }
+      void byItem;
       const compressed = await gzipBase64({ map, count });
       const res = await fetch(apiUrl("/admin/barcode-master"), {
         method: "POST",

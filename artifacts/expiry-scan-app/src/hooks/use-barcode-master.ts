@@ -54,7 +54,7 @@ export function buildBarcodeMaps(rows: any[]): {
       return key ? String(row[key] ?? '').trim() : '';
     };
 
-    const rawBarcode = getVal('barcode', 'upc', 'ean', 'gtin');
+    const rawBarcode = getVal('barcode', 'upc', 'ean', 'gtin', 'plu', 'scancode', 'scan');
     const itemNumber = getVal('itemno', 'item', 'sku', 'article', 'itemnum', 'itemnumber', 'itemcode');
     const description = getVal('desc', 'description', 'name', 'product');
     const soh = getVal('soh', 'stockonhand', 'stock', 'onhand');
