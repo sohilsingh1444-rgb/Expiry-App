@@ -160,7 +160,7 @@ export default function StorePortalPage() {
       setSohMeta({ uploadedAt: result.uploadedAt, count: result.count });
       toast({ title: "SOH uploaded successfully", description: `${result.count} rows saved for ${session.storeName}.` });
     } catch (err) {
-      toast({ title: "Upload error", description: String(err), variant: "destructive" });
+      toast({ title: "Upload error", description: err instanceof Error ? err.message : "Failed to upload SOH data.", variant: "destructive" });
     }
     setUploading(false);
     if (fileRef.current) fileRef.current.value = "";

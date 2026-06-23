@@ -591,8 +591,7 @@ export default function Home() {
       const specialsItems = Object.keys(byItem).length;
       const rrpItems = Object.keys(rrpByItem).length;
       if (count === 0) {
-        const cols = rows.length > 0 ? Object.keys(rows[0]).slice(0, 8).join(', ') : 'no columns found';
-        toast({ title: "No data matched", description: `Columns detected: ${cols}. Need OfferDescription with NR/CR/WR or Price Group NR/CR/WR.`, variant: "destructive" });
+        toast({ title: "No data matched", description: `Found ${rows.length} rows but could not read any deal prices. Make sure this is the Specials/Offers export with a Price Group or OfferDescription column showing NR, CR, or WR.`, variant: "destructive" });
       } else {
         if (specialsItems > 0) saveSpecialsData(byItem);
         if (rrpItems > 0) saveRrpData(rrpByItem);
