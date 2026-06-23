@@ -74,12 +74,12 @@ export function buildBarcodeMaps(rows: any[]): {
       findRegionCol('crwr', 'rrp', 'retail', 'price') ||
       getVal('rrp', 'retailprice', 'retail');
     const special_CRWR =
-      findRegionCol('crwr', 'special', 'offer', 'promo', 'sale') ||
-      getVal('special', 'specialprice', 'promo', 'sale', 'offerprice', 'offer', 'saleprice');
+      findRegionCol('crwr', 'special', 'promo') ||
+      getVal('special', 'specialprice', 'promo');
     const rrp_NR =
       findRegionCol('nr', 'rrp', 'retail', 'price');
     const special_NR =
-      findRegionCol('nr', 'special', 'offer', 'promo', 'sale');
+      findRegionCol('nr', 'special', 'promo');
 
     const entry: BarcodeMasterRow = {
       barcode: rawBarcode ? String(rawBarcode).trim().replace(/\.0$/, '') : '',
