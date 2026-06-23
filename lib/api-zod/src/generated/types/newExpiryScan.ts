@@ -13,7 +13,7 @@ export interface NewExpiryScan {
   barcode: string;
   itemNumber?: string | null;
   description?: string | null;
-  /** @minimum 0.01 */
+  /** @minimum 1 */
   qty: number;
   expiryDate?: Date | null;
   scanDate: Date;
