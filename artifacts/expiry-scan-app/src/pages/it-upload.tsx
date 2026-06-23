@@ -139,7 +139,8 @@ export default function ItUploadPage() {
         const text = await res.text();
         let errMsg = `Upload failed (${res.status})`;
         if (res.status === 413) errMsg = "File is too large. Try exporting only essential columns.";
-        else { try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { /* non-JSON */ } }
+        else if (res.status === 401) errMsg = "Incorrect password.";
+        else { try { const msg = (JSON.parse(text) as { error?: string }).error; if (msg) errMsg = String(msg).slice(0, 200); } catch { /* non-JSON */ } }
         toast({ title: "Upload failed", description: errMsg, variant: "destructive" });
       }
     } catch (err) {
@@ -163,10 +164,9 @@ export default function ItUploadPage() {
       }
       const { byItem, count } = buildRrpMap(rows);
       if (Object.keys(byItem).length === 0) {
-        const detectedCols = Object.keys(rows[0] ?? {}).join(", ") || "none";
         toast({
           title: "No RRP data found",
-          description: `Parser found ${rows.length} rows but 0 valid entries. Columns detected: ${detectedCols}`,
+          description: `Found ${rows.length} rows but no valid price entries. Make sure this is the Customer Price Group file with Sales Code (CR/NR/WR), Item No., and Unit Price Including VAT columns.`,
           variant: "destructive",
         });
         return;
@@ -184,7 +184,8 @@ export default function ItUploadPage() {
         const text = await res.text();
         let errMsg = `Upload failed (${res.status})`;
         if (res.status === 413) errMsg = "File is too large. Try exporting only essential columns.";
-        else { try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { /* non-JSON */ } }
+        else if (res.status === 401) errMsg = "Incorrect password.";
+        else { try { const msg = (JSON.parse(text) as { error?: string }).error; if (msg) errMsg = String(msg).slice(0, 200); } catch { /* non-JSON */ } }
         toast({ title: "Upload failed", description: errMsg, variant: "destructive" });
       }
     } catch (err) {
@@ -238,7 +239,8 @@ export default function ItUploadPage() {
         const text = await specRes.text();
         let errMsg = `Upload failed (${specRes.status})`;
         if (specRes.status === 413) errMsg = "File is too large. Try exporting only essential columns.";
-        else { try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { /* non-JSON */ } }
+        else if (specRes.status === 401) errMsg = "Incorrect password.";
+        else { try { const msg = (JSON.parse(text) as { error?: string }).error; if (msg) errMsg = String(msg).slice(0, 200); } catch { /* non-JSON */ } }
         toast({ title: "Upload failed", description: errMsg, variant: "destructive" });
       }
     } catch (err) {

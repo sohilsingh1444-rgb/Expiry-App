@@ -123,10 +123,15 @@ router.post("/admin/barcode-master", async (req, res): Promise<void> => {
   }
   const now = new Date().toISOString();
   const itemCount = count ?? Object.keys(map).length;
-  await setSetting("bm_map_json", JSON.stringify(map));
-  await setSetting("bm_by_item_json", JSON.stringify(byItem));
-  await setSetting("bm_uploaded_at", now);
-  await setSetting("bm_count", String(itemCount));
+  try {
+    await setSetting("bm_map_json", JSON.stringify(map));
+    await setSetting("bm_by_item_json", JSON.stringify(byItem));
+    await setSetting("bm_uploaded_at", now);
+    await setSetting("bm_count", String(itemCount));
+  } catch {
+    res.status(500).json({ error: "Failed to save barcode master data. Please try again." });
+    return;
+  }
   res.json({ ok: true, uploadedAt: now, count: itemCount });
 });
 
@@ -168,9 +173,14 @@ router.post("/rrp-data", async (req, res): Promise<void> => {
   if (!byItem || Object.keys(byItem).length === 0) { res.status(400).json({ error: "byItem is required" }); return; }
   const now = new Date().toISOString();
   const itemCount = count ?? Object.keys(byItem).length;
-  await setSetting("rrp_by_item_json", JSON.stringify(byItem));
-  await setSetting("rrp_uploaded_at", now);
-  await setSetting("rrp_count", String(itemCount));
+  try {
+    await setSetting("rrp_by_item_json", JSON.stringify(byItem));
+    await setSetting("rrp_uploaded_at", now);
+    await setSetting("rrp_count", String(itemCount));
+  } catch {
+    res.status(500).json({ error: "Failed to save RRP data. Please try again." });
+    return;
+  }
   res.json({ ok: true, uploadedAt: now, count: itemCount });
 });
 
@@ -183,9 +193,14 @@ router.post("/admin/rrp-data", async (req, res): Promise<void> => {
   }
   const now = new Date().toISOString();
   const itemCount = count ?? Object.keys(byItem).length;
-  await setSetting("rrp_by_item_json", JSON.stringify(byItem));
-  await setSetting("rrp_uploaded_at", now);
-  await setSetting("rrp_count", String(itemCount));
+  try {
+    await setSetting("rrp_by_item_json", JSON.stringify(byItem));
+    await setSetting("rrp_uploaded_at", now);
+    await setSetting("rrp_count", String(itemCount));
+  } catch {
+    res.status(500).json({ error: "Failed to save RRP data. Please try again." });
+    return;
+  }
   res.json({ ok: true, uploadedAt: now, count: itemCount });
 });
 
@@ -227,9 +242,14 @@ router.post("/specials-data", async (req, res): Promise<void> => {
   if (!byItem || Object.keys(byItem).length === 0) { res.status(400).json({ error: "byItem is required" }); return; }
   const now = new Date().toISOString();
   const itemCount = count ?? Object.keys(byItem).length;
-  await setSetting("specials_by_item_json", JSON.stringify(byItem));
-  await setSetting("specials_uploaded_at", now);
-  await setSetting("specials_count", String(itemCount));
+  try {
+    await setSetting("specials_by_item_json", JSON.stringify(byItem));
+    await setSetting("specials_uploaded_at", now);
+    await setSetting("specials_count", String(itemCount));
+  } catch {
+    res.status(500).json({ error: "Failed to save specials data. Please try again." });
+    return;
+  }
   res.json({ ok: true, uploadedAt: now, count: itemCount });
 });
 
@@ -242,9 +262,14 @@ router.post("/admin/specials-data", async (req, res): Promise<void> => {
   }
   const now = new Date().toISOString();
   const itemCount = count ?? Object.keys(byItem).length;
-  await setSetting("specials_by_item_json", JSON.stringify(byItem));
-  await setSetting("specials_uploaded_at", now);
-  await setSetting("specials_count", String(itemCount));
+  try {
+    await setSetting("specials_by_item_json", JSON.stringify(byItem));
+    await setSetting("specials_uploaded_at", now);
+    await setSetting("specials_count", String(itemCount));
+  } catch {
+    res.status(500).json({ error: "Failed to save specials data. Please try again." });
+    return;
+  }
   res.json({ ok: true, uploadedAt: now, count: itemCount });
 });
 
