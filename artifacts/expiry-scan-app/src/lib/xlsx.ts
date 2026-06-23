@@ -45,18 +45,12 @@ async function readWorksheetAsAoa(file: File): Promise<any[][]> {
   }
 
   try {
-    const ExcelJS = (await import('exceljs')).default;
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await file.arrayBuffer());
-    const sheet = workbook.worksheets[0];
-    if (!sheet) return [];
-
-    const aoa: any[][] = [];
-    sheet.eachRow({ includeEmpty: false }, (row) => {
-      const vals = row.values as any[];
-      const rowArr: any[] = vals.slice(1).map(extractCellValue);
-      aoa.push(rowArr);
-    });
+    const XLSX = await import('xlsx');
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    if (!ws) return [];
+    const aoa: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
     return aoa;
   } catch {
     // Last-resort: try treating it as CSV text
