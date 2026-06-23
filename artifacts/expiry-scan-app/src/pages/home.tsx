@@ -164,7 +164,7 @@ export default function Home() {
 
   const persisted = loadPersistedSession();
 
-  const [isSetupComplete, setIsSetupComplete] = useState(false);
+  const [isSetupComplete, setIsSetupComplete] = useState(() => sessionStorage.getItem('expiry_setup_done') === '1');
   const [setupData, setSetupData] = useState<{pdUserName: string, storeLocation: string, scanDate: string} | null>(() => persisted?.setupData ?? null);
   const [newSessionId, setNewSessionId] = useState<string | null>(() => persisted?.sessionId ?? null);
   const [showNonExpiredOnly, setShowNonExpiredOnly] = useState(false);
@@ -426,6 +426,7 @@ export default function Home() {
     setSetupData(values);
     setNewSessionId(sid);
     setIsSetupComplete(true);
+    try { sessionStorage.setItem('expiry_setup_done', '1'); } catch {}
     try {
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ setupData: values, sessionId: sid }));
     } catch {}
@@ -691,6 +692,7 @@ export default function Home() {
         queryClient.invalidateQueries({ queryKey: getListExpiryScansQueryKey(sessionId) });
         queryClient.invalidateQueries({ queryKey: getGetExpirySessionSummaryQueryKey(sessionId) });
         try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch {}
+        try { sessionStorage.removeItem('expiry_setup_done'); } catch {}
         toast({
           title: "Exported and cleared",
           description: "Report emailed. Session data cleared.",
@@ -859,7 +861,7 @@ export default function Home() {
             <div className="flex items-center gap-1.5 bg-zinc-900 px-3 py-1.5 rounded-md border border-zinc-800">
               <span className="text-zinc-500">User:</span> <span className="text-amber-500">{setupData?.pdUserName}</span>
             </div>
-            <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white" onClick={() => setIsSetupComplete(false)}>
+            <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white" onClick={() => { setIsSetupComplete(false); try { sessionStorage.removeItem('expiry_setup_done'); } catch {} }}>
               Change
             </Button>
             <a href="/admin" className="text-zinc-500 hover:text-zinc-300 text-xs transition-colors">
