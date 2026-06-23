@@ -70,10 +70,13 @@ export async function parseBarcodeMaster(file: File): Promise<any[]> {
   try { aoa = await readWorksheetAsAoa(file); } catch { return []; }
   if (!Array.isArray(aoa) || aoa.length < 2 || !Array.isArray(aoa[0])) return [];
 
+  const REGION_CODES = new Set(['CR|WR', 'CR', 'NR', 'WR', 'CRWR']);
   let regionRowIdx = -1;
   for (let i = 0; i < Math.min(aoa.length, 10); i++) {
     const rowUpper = aoa[i].map((c: any) => String(c ?? '').trim().toUpperCase());
-    if (rowUpper.some(c => c === 'CR|WR' || c === 'CR' || c === 'NR' || c === 'WR')) {
+    const nonEmpty = rowUpper.filter(c => c !== '');
+    // A genuine region-separator row has ≥2 region codes and every non-empty cell is a region code.
+    if (nonEmpty.length >= 2 && nonEmpty.every(c => REGION_CODES.has(c))) {
       regionRowIdx = i;
       break;
     }
