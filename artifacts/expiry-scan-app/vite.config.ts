@@ -76,6 +76,24 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (id.includes("node_modules")) {
+            if (id.includes("exceljs") || id.includes("archiver") || id.includes("jszip")) return "vendor-excel";
+            if (id.includes("@zxing")) return "vendor-zxing";
+            if (id.includes("react-dom") || id.includes("react/")) return "vendor-react";
+            if (id.includes("@tanstack")) return "vendor-query";
+            if (id.includes("@radix-ui") || id.includes("lucide-react") || id.includes("class-variance") || id.includes("clsx") || id.includes("tailwind-merge")) return "vendor-ui";
+            if (id.includes("date-fns")) return "vendor-datefns";
+            if (id.includes("zod") || id.includes("react-hook-form") || id.includes("@hookform")) return "vendor-forms";
+            if (id.includes("wouter")) return "vendor-router";
+            return "vendor-misc";
+          }
+        },
+      },
+    },
   },
   server: {
     port,

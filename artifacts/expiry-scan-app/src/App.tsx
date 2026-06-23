@@ -1,14 +1,15 @@
-import { Component, type ReactNode } from "react";
+import { Component, lazy, Suspense, type ReactNode } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { OfflineBanner } from "@/components/offline-banner";
-import NotFound from "@/pages/not-found";
-import Home from "@/pages/home";
-import AdminPage from "@/pages/admin";
-import ItUploadPage from "@/pages/it-upload";
-import StorePortalPage from "@/pages/store-portal";
+
+const NotFound = lazy(() => import("@/pages/not-found"));
+const Home = lazy(() => import("@/pages/home"));
+const AdminPage = lazy(() => import("@/pages/admin"));
+const ItUploadPage = lazy(() => import("@/pages/it-upload"));
+const StorePortalPage = lazy(() => import("@/pages/store-portal"));
 
 const queryClient = new QueryClient();
 
@@ -48,13 +49,15 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/admin" component={AdminPage} />
-      <Route path="/it-upload" component={ItUploadPage} />
-      <Route path="/store-portal" component={StorePortalPage} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<div className="min-h-[100dvh] bg-zinc-50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>}>
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/admin" component={AdminPage} />
+        <Route path="/it-upload" component={ItUploadPage} />
+        <Route path="/store-portal" component={StorePortalPage} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { BrowserMultiFormatReader } from "@zxing/browser";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Camera } from "lucide-react";
@@ -134,6 +133,7 @@ export function CameraScanner({ open, onClose, onDetected }: CameraScannerProps)
         if (cancelled) { stop(); return; }
         setScanning(true);
 
+        const { BrowserMultiFormatReader } = await import("@zxing/browser");
         const reader = new BrowserMultiFormatReader();
         const controls = await reader.decodeFromStream(stream, video, (result, err, controls) => {
           if (cancelled) { controls?.stop(); return; }
