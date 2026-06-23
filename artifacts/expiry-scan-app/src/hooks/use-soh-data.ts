@@ -179,6 +179,22 @@ export function useSohData() {
     setSohByRegion(new Map());
   }, []);
 
+  const loadStoreSoh = useCallback(async (storeCode: string): Promise<{ count: number; uploadedAt: string | null }> => {
+    try {
+      const res = await fetch(`${getApiBase()}/api/store-portal/soh-data?storeCode=${encodeURIComponent(storeCode)}`);
+      if (!res.ok) return { count: 0, uploadedAt: null };
+      const data: { byBarcode: Record<string, number>; byItem: Record<string, number>; count: number; uploadedAt?: string } = await res.json();
+      if (data.count > 0) {
+        setSohData(new Map(Object.entries(data.byBarcode).map(([k, v]) => [k, Number(v)])));
+        setSohByItem(new Map(Object.entries(data.byItem).map(([k, v]) => [k, Number(v)])));
+        setSohByStore(new Map([[storeCode, { byBarcode: data.byBarcode, byItem: data.byItem }]]));
+      }
+      return { count: data.count, uploadedAt: data.uploadedAt ?? null };
+    } catch {
+      return { count: 0, uploadedAt: null };
+    }
+  }, []);
+
   const lookupSoh = useCallback((barcode: string, itemNumber?: string, storeIdentifiers?: string[], region?: string): number | undefined => {
     let nb = String(barcode).trim();
     if (nb.endsWith('.0')) nb = nb.slice(0, -2);
@@ -227,5 +243,5 @@ export function useSohData() {
     return undefined;
   }, [sohData, sohByItem, sohByStore]);
 
-  return { sohData, sohByItem, sohByStore, isLoaded, saveSohData, clearSohData, lookupSoh };
+  return { sohData, sohByItem, sohByStore, isLoaded, saveSohData, clearSohData, loadStoreSoh, lookupSoh };
 }

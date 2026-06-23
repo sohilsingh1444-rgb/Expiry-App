@@ -43,7 +43,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { AlertCircle, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight, Database, ChevronsUpDown, Check, Camera, Tag, Percent } from "lucide-react";
+import { AlertCircle, CheckCircle2, FileSpreadsheet, Trash2, Upload, ScanLine, ArrowRight, Database, ChevronsUpDown, Check, Camera, Tag, Percent } from "lucide-react";
 import { CameraScanner } from "@/components/camera-scanner";
 import { parseBarcodeMaster, parseSohFile, parseRrpFile, buildRrpMap, parseSpecialsFile, buildSpecialsMap, exportToExcel } from "@/lib/xlsx";
 import { useBarcodeMaster } from "@/hooks/use-barcode-master";
@@ -177,8 +177,9 @@ export default function Home() {
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const { masterData, isLoaded, rrpCount, specialsCount, saveMasterData, clearMasterData, saveRrpData, saveSpecialsData, lookupBarcode } = useBarcodeMaster();
-  const { sohData, sohByItem, saveSohData, clearSohData, lookupSoh } = useSohData();
+  const { sohData, sohByItem, saveSohData, clearSohData, loadStoreSoh, lookupSoh } = useSohData();
   const totalSohItems = Math.max(sohData.size, sohByItem.size);
+  const [storeSohMeta, setStoreSohMeta] = useState<{ count: number; uploadedAt: string | null } | null>(null);
   const { stores: storeList, getStoreByCode, getStoreRegion } = useStoreList();
   // Pass store code (e.g. "S0014") as primary identifier — matches ERP Location Code in SOH file.
   // Also include display name as fallback so partial/fuzzy matches still work.
@@ -190,6 +191,14 @@ export default function Home() {
     : [];
   const storeRegion: string | undefined = setupData?.storeLocation ? getStoreRegion(setupData.storeLocation) : undefined;
   const { isOnline, pendingCount, refreshPendingCount } = useOnlineStatus();
+
+  // Auto-load SOH from store portal whenever the selected store changes
+  useEffect(() => {
+    if (!setupData?.storeLocation) return;
+    loadStoreSoh(setupData.storeLocation).then(meta => {
+      if (meta.count > 0) setStoreSohMeta(meta);
+    });
+  }, [setupData?.storeLocation, loadStoreSoh]);
 
   const setupForm = useForm<z.infer<typeof setupSchema>>({
     resolver: zodResolver(setupSchema),
@@ -1302,7 +1311,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          {/* SOH Data Upload Card */}
+          {/* SOH Data Card */}
           <Card className="border-zinc-200 shadow-sm bg-white">
             <CardHeader className="pb-3 border-b border-zinc-100">
               <CardTitle className="text-base flex items-center gap-2">
@@ -1316,6 +1325,22 @@ export default function Home() {
                 <span className="font-bold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">{totalSohItems.toLocaleString()}</span>
               </div>
 
+              {/* Auto-loaded from store portal */}
+              {storeSohMeta && storeSohMeta.count > 0 && (
+                <Alert className="bg-green-50 border-green-200 text-green-800 py-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  <AlertDescription className="text-xs ml-2">
+                    Auto-loaded from store portal · {storeSohMeta.count.toLocaleString()} rows
+                    {storeSohMeta.uploadedAt && (
+                      <span className="block text-green-600">
+                        Last upload: {new Date(storeSohMeta.uploadedAt).toLocaleString('en-FJ', { dateStyle: 'medium', timeStyle: 'short' })}
+                      </span>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Manual upload as fallback */}
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Input
@@ -1326,21 +1351,21 @@ export default function Home() {
                     id="soh-upload"
                   />
                   <Button variant="outline" className="w-full border-zinc-200 text-zinc-500 text-sm pointer-events-none">
-                    <Upload className="w-3.5 h-3.5 mr-2" /> Upload SOH file
+                    <Upload className="w-3.5 h-3.5 mr-2" /> Upload SOH file manually
                   </Button>
                 </div>
                 {totalSohItems > 0 && (
-                  <Button variant="ghost" className="text-destructive hover:bg-destructive/10 text-sm" onClick={clearSohData}>
+                  <Button variant="ghost" className="text-destructive hover:bg-destructive/10 text-sm" onClick={() => { clearSohData(); setStoreSohMeta(null); }}>
                     Clear
                   </Button>
                 )}
               </div>
 
-              {totalSohItems === 0 && (
+              {totalSohItems === 0 && !storeSohMeta && (
                 <Alert className="bg-purple-50 border-purple-200 text-purple-800 py-2">
                   <AlertCircle className="w-4 h-4 text-purple-600" />
                   <AlertDescription className="text-xs ml-2">
-                    Upload your system SOH report (.xlsx) to show on-hand quantities per barcode.
+                    SOH will auto-load once your store uploads via the Store Portal, or upload a file manually above.
                   </AlertDescription>
                 </Alert>
               )}

@@ -193,4 +193,25 @@ router.get("/store-portal/soh-meta", async (req, res): Promise<void> => {
   res.json({ uploadedAt, count: count ? parseInt(count) : null });
 });
 
+router.get("/store-portal/soh-data", async (req, res): Promise<void> => {
+  const code = req.query["storeCode"] as string;
+  if (!code) {
+    res.status(400).json({ error: "storeCode required" });
+    return;
+  }
+  const raw = await getSetting(`soh_store_${code}_json`);
+  if (!raw) {
+    res.json({ byBarcode: {}, byItem: {}, count: 0 });
+    return;
+  }
+  try {
+    const data = JSON.parse(raw) as { byBarcode: Record<string, number>; byItem: Record<string, number> };
+    const count = await getSetting(`soh_store_${code}_count`);
+    const uploadedAt = await getSetting(`soh_store_${code}_uploaded_at`);
+    res.json({ byBarcode: data.byBarcode ?? {}, byItem: data.byItem ?? {}, count: count ? parseInt(count) : 0, uploadedAt });
+  } catch {
+    res.json({ byBarcode: {}, byItem: {}, count: 0 });
+  }
+});
+
 export default router;
