@@ -72,7 +72,7 @@ export function buildBarcodeMaps(rows: any[]): {
 
     const rrp_CRWR =
       findRegionCol('crwr', 'rrp', 'retail', 'price') ||
-      getVal('rrp', 'retailprice', 'retail');
+      getVal('rrp', 'retailprice', 'retail', 'unitprice', 'salesprice', 'listprice');
     const special_CRWR =
       findRegionCol('crwr', 'special', 'promo') ||
       getVal('special', 'specialprice', 'promo');
