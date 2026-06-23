@@ -164,7 +164,7 @@ export default function Home() {
 
   const persisted = loadPersistedSession();
 
-  const [isSetupComplete, setIsSetupComplete] = useState(() => !!persisted);
+  const [isSetupComplete, setIsSetupComplete] = useState(false);
   const [setupData, setSetupData] = useState<{pdUserName: string, storeLocation: string, scanDate: string} | null>(() => persisted?.setupData ?? null);
   const [newSessionId, setNewSessionId] = useState<string | null>(() => persisted?.sessionId ?? null);
   const [showNonExpiredOnly, setShowNonExpiredOnly] = useState(false);
