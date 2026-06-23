@@ -912,36 +912,33 @@ export default function Home() {
                   {matchedItem && (matchedItem.rrp || matchedItem.special || matchedItem.soh || totalSohItems > 0) && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-1.5 text-sm">
                       <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Item Data</div>
-                      {/* RRP row: Each / Case of 6 / Case of 12 */}
+                      {/* RRP row: Each / Case of 6 / Case of 12 — special shown inline, no dates */}
                       {(matchedItem?.rrp || matchedItem?.rrp_6 || matchedItem?.rrp_12) && (
                         <div className="grid grid-cols-3 gap-1.5 text-center">
-                          <div className="bg-white rounded-md border border-amber-100 px-1.5 py-1.5">
+                          <div className={`bg-white rounded-md border px-1.5 py-1.5 ${matchedItem?.special ? 'border-green-200' : 'border-amber-100'}`}>
                             <div className="text-xs text-zinc-500">RRP (Each)</div>
                             <div className="font-bold text-zinc-900">{matchedItem?.rrp ? `$${matchedItem.rrp}` : '—'}</div>
+                            {matchedItem?.special && (
+                              <div className="text-xs font-semibold text-green-600 mt-0.5">Special ${matchedItem.special}</div>
+                            )}
                           </div>
-                          <div className="bg-white rounded-md border border-amber-100 px-1.5 py-1.5">
+                          <div className={`bg-white rounded-md border px-1.5 py-1.5 ${matchedItem?.rrp_6_special ? 'border-green-200' : 'border-amber-100'}`}>
                             <div className="text-xs text-zinc-500">Case of 6</div>
                             <div className="font-bold text-zinc-900">{matchedItem?.rrp_6 ? `$${matchedItem.rrp_6}` : '—'}</div>
+                            {(matchedItem as any)?.rrp_6_special && (
+                              <div className="text-xs font-semibold text-green-600 mt-0.5">Special ${(matchedItem as any).rrp_6_special}</div>
+                            )}
                           </div>
-                          <div className="bg-white rounded-md border border-amber-100 px-1.5 py-1.5">
+                          <div className={`bg-white rounded-md border px-1.5 py-1.5 ${(matchedItem as any)?.rrp_12_special ? 'border-green-200' : 'border-amber-100'}`}>
                             <div className="text-xs text-zinc-500">Case of 12</div>
                             <div className="font-bold text-zinc-900">{matchedItem?.rrp_12 ? `$${matchedItem.rrp_12}` : '—'}</div>
+                            {(matchedItem as any)?.rrp_12_special && (
+                              <div className="text-xs font-semibold text-green-600 mt-0.5">Special ${(matchedItem as any).rrp_12_special}</div>
+                            )}
                           </div>
                         </div>
                       )}
                       <div className="grid grid-cols-2 gap-2 text-center">
-                        {matchedItem?.special && (
-                          <div className="bg-white rounded-md border border-green-100 px-2 py-1.5">
-                            <div className="text-xs text-zinc-500">Special</div>
-                            <div className="font-bold text-green-700">${matchedItem.special}</div>
-                            {(matchedItem.special_start || matchedItem.special_end) && (
-                              <div className="text-xs text-zinc-400 mt-0.5 leading-tight">
-                                {matchedItem.special_start && <span>From {matchedItem.special_start}</span>}
-                                {matchedItem.special_end && <span className="block">To {matchedItem.special_end}</span>}
-                              </div>
-                            )}
-                          </div>
-                        )}
                         {matchedItem?.soh && (
                           <div className="bg-white rounded-md border border-blue-100 px-2 py-1.5">
                             <div className="text-xs text-zinc-500">Store SOH</div>
