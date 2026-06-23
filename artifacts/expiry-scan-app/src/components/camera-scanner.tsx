@@ -10,14 +10,24 @@ interface CameraScannerProps {
   onDetected: (barcode: string) => void;
 }
 
-const RETAIL_FORMATS = [
-  "ean_13", "ean_8", "upc_a", "upc_e",
-  "code_128", "code_39", "code_93", "itf",
-  "qr_code", "data_matrix",
-];
-
 function hasBarcodeDetector(): boolean {
   return typeof window !== "undefined" && "BarcodeDetector" in window;
+}
+
+async function getSupportedFormats(): Promise<string[]> {
+  try {
+    // @ts-ignore
+    const formats: string[] = await BarcodeDetector.getSupportedFormats();
+    if (formats && formats.length > 0) return formats;
+  } catch { /* ignore */ }
+  // Fallback list if getSupportedFormats() is not available
+  return [
+    "ean_13", "ean_8", "upc_a", "upc_e",
+    "code_128", "code_39", "code_93", "itf",
+    "codabar", "code_39_mod_43", "aztec",
+    "pdf417", "qr_code", "data_matrix",
+    "unknown",
+  ];
 }
 
 export function CameraScanner({ open, onClose, onDetected }: CameraScannerProps) {
@@ -65,8 +75,9 @@ export function CameraScanner({ open, onClose, onDetected }: CameraScannerProps)
 
     async function startNative() {
       try {
+        const formats = await getSupportedFormats();
         // @ts-ignore — BarcodeDetector is not in TS lib yet
-        const detector = new BarcodeDetector({ formats: RETAIL_FORMATS });
+        const detector = new BarcodeDetector({ formats });
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false,
