@@ -32,11 +32,9 @@ app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.use("/api", router);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  const causeErr = err instanceof Error && err.cause instanceof Error ? err.cause : undefined;
-  const causeCode = causeErr ? (causeErr as NodeJS.ErrnoException).code : undefined;
   logger.error({ err }, "Unhandled route error");
-  // Return a generic message — never echo raw error text (may contain large DB values)
-  res.status(500).json({ error: "An unexpected server error occurred. Please try again.", code: causeCode });
+  const msg = err instanceof Error ? err.message : String(err);
+  res.status(500).json({ error: msg.slice(0, 300) });
 });
 
 export default app;
