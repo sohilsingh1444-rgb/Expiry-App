@@ -76,7 +76,7 @@ const scanSchema = z.object({
   notOnDisplayQty: z.coerce.number().optional(),
 }).superRefine((data, ctx) => {
   const hasComplianceFlag = data.wrongRrp || data.missingSpecialTicket || data.notOnDisplay;
-  if (!hasComplianceFlag && data.qty <= 0) {
+  if (data.qty <= 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "Qty must be greater than 0",
