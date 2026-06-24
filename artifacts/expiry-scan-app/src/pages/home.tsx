@@ -65,7 +65,7 @@ const scanSchema = z.object({
   barcode: z.string().min(1, "Barcode is required"),
   itemNumber: z.string().optional(),
   description: z.string().optional(),
-  qty: z.coerce.number({ invalid_type_error: "Qty is required" }).min(0.01, "Qty must be at least 0.01"),
+  qty: z.coerce.number({ invalid_type_error: "Qty is required" }).min(0),
   expiryDate: z.string().optional(),
   remarks: z.string().optional(),
   wrongRrp: z.boolean().default(false),
@@ -212,6 +212,7 @@ export default function Home() {
 
   const scanForm = useForm<z.infer<typeof scanSchema>>({
     resolver: zodResolver(scanSchema),
+    reValidateMode: "onSubmit",
     defaultValues: {
       barcode: "",
       itemNumber: "",
