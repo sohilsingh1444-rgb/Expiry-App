@@ -80,7 +80,7 @@ export const GetExpirySessionSummaryResponse = zod.object({
 /**
  * @summary Create an expiry scan row
  */
-export const createExpiryScanBodyQtyMin = 0.01;
+export const createExpiryScanBodyQtyMin = 0;
 
 export const CreateExpiryScanBody = zod.object({
   sessionId: zod.string(),
