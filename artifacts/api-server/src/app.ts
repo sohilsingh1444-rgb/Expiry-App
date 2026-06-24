@@ -33,8 +33,7 @@ app.use("/api", router);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   logger.error({ err }, "Unhandled route error");
-  const msg = err instanceof Error ? err.message : String(err);
-  res.status(500).json({ error: msg.slice(0, 300) });
+  res.status(500).json({ error: "An unexpected server error occurred. Please try again." });
 });
 
 export default app;
