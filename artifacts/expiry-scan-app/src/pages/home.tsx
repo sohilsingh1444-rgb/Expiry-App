@@ -376,11 +376,10 @@ export default function Home() {
         }
         const errMsg = (() => {
           if (!err) return "Scan could not be saved. Please try again.";
-          const s = String(err);
-          const match = s.match(/"message"\s*:\s*"([^"]+)"/);
-          if (match) return match[1];
-          const errField = s.match(/"error"\s*:\s*"([^"]+)"/);
-          if (errField) return errField[1].slice(0, 200);
+          if (err instanceof Error) {
+            const detail = err.message.replace(/^HTTP \d+[^:]*:\s*/i, "").trim();
+            return detail.slice(0, 250) || "Scan could not be saved. Please try again.";
+          }
           return "Scan could not be saved. Please try again.";
         })();
         toast({ title: "Failed to save scan", description: errMsg, variant: "destructive" });
