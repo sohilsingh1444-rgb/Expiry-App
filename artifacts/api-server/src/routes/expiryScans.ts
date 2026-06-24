@@ -170,7 +170,10 @@ router.post("/expiry-scans", async (req, res, next): Promise<void> => {
     const parsed = CreateExpiryScanBody.safeParse(req.body);
 
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.message });
+      const firstIssue = parsed.error.issues[0];
+      const field = firstIssue?.path?.join('.') ?? 'field';
+      const msg = firstIssue?.message ?? 'Invalid input';
+      res.status(400).json({ error: `${field}: ${msg}` });
       return;
     }
 

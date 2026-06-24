@@ -80,6 +80,7 @@ export const GetExpirySessionSummaryResponse = zod.object({
 /**
  * @summary Create an expiry scan row
  */
+export const createExpiryScanBodyQtyMin = 0.01;
 
 export const CreateExpiryScanBody = zod.object({
   sessionId: zod.string(),
@@ -88,7 +89,7 @@ export const CreateExpiryScanBody = zod.object({
   barcode: zod.string(),
   itemNumber: zod.string().nullish(),
   description: zod.string().nullish(),
-  qty: zod.number().min(1),
+  qty: zod.number().min(createExpiryScanBodyQtyMin),
   expiryDate: zod.coerce.date().nullish(),
   scanDate: zod.coerce.date(),
   remarks: zod.string().nullish(),

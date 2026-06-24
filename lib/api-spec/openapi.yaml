@@ -232,7 +232,7 @@ components:
           nullable: true
         qty:
           type: number
-          minimum: 1
+          minimum: 0.01
         expiryDate:
           type: string
           format: date

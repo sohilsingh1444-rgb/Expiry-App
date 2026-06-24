@@ -65,7 +65,7 @@ const scanSchema = z.object({
   barcode: z.string().min(1, "Barcode is required"),
   itemNumber: z.string().optional(),
   description: z.string().optional(),
-  qty: z.coerce.number({ invalid_type_error: "Qty is required" }).min(0),
+  qty: z.coerce.number({ invalid_type_error: "Qty is required" }).min(0.01, "Qty must be at least 0.01"),
   expiryDate: z.string().optional(),
   remarks: z.string().optional(),
   wrongRrp: z.boolean().default(false),
@@ -373,7 +373,16 @@ export default function Home() {
         if (sessionId && context?.previousScans !== undefined) {
           queryClient.setQueryData(getListExpiryScansQueryKey(sessionId), context.previousScans);
         }
-        toast({ title: "Failed to save scan", description: String(err), variant: "destructive" });
+        const errMsg = (() => {
+          if (!err) return "Scan could not be saved. Please try again.";
+          const s = String(err);
+          const match = s.match(/"message"\s*:\s*"([^"]+)"/);
+          if (match) return match[1];
+          const errField = s.match(/"error"\s*:\s*"([^"]+)"/);
+          if (errField) return errField[1].slice(0, 200);
+          return "Scan could not be saved. Please try again.";
+        })();
+        toast({ title: "Failed to save scan", description: errMsg, variant: "destructive" });
       },
       onSettled: () => {
         if (sessionId) {
