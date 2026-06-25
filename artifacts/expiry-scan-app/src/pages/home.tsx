@@ -270,15 +270,17 @@ export default function Home() {
 
   useEffect(() => {
     if (watchBarcode && watchBarcode.length > 3) {
-      const match = lookupBarcode(watchBarcode, storeRegion, scanGetValues("itemNumber"));
+      // Always reset item fields first — never fall back on a stale auto-filled itemNumber
+      setMatchedItem(null);
+      scanSetValue("itemNumber", "");
+      scanSetValue("description", "");
+      // Look up by barcode only (no itemNumber fallback — that caused stale-data bleed)
+      const match = lookupBarcode(watchBarcode, storeRegion);
       if (match) {
         setMatchedItem(match);
         scanSetValue("itemNumber", match.itemNumber);
         scanSetValue("description", match.description);
       } else {
-        setMatchedItem(null);
-        scanSetValue("itemNumber", "");
-        scanSetValue("description", "");
         // Show error toast when scanned from camera and master is loaded but barcode not found
         if (cameraScannedRef.current && isLoaded && masterData.size > 0) {
           toast({
