@@ -991,10 +991,17 @@ export default function Home() {
                           </div>
                         </FormControl>
                         <FormMessage />
+                        {/* Inline barcode-not-found warning */}
+                        {watchBarcode && watchBarcode.length > 6 && !matchedItem && isLoaded && masterData.length > 0 && (
+                          <p className="flex items-center gap-1.5 text-xs font-medium text-red-600 mt-1">
+                            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-600 shrink-0">!</span>
+                            Barcode <span className="font-mono">"{watchBarcode}"</span> not found in barcode master
+                          </p>
+                        )}
                       </FormItem>
                     )}
                   />
-                  
+
                   {/* Matched item info panel */}
                   {matchedItem && (matchedItem.rrp || matchedItem.special || matchedItem.soh || totalSohItems > 0) && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-1.5 text-sm">
