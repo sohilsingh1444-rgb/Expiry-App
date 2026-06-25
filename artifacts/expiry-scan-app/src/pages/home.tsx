@@ -196,10 +196,12 @@ export default function Home() {
   // Auto-load SOH from store portal whenever the selected store changes
   useEffect(() => {
     if (!setupData?.storeLocation) return;
+    setStoreSohMeta(null);
+    clearSohData();
     loadStoreSoh(setupData.storeLocation).then(meta => {
       if (meta.count > 0) setStoreSohMeta(meta);
     });
-  }, [setupData?.storeLocation, loadStoreSoh]);
+  }, [setupData?.storeLocation, loadStoreSoh, clearSohData]);
 
   const setupForm = useForm<z.infer<typeof setupSchema>>({
     resolver: zodResolver(setupSchema),
