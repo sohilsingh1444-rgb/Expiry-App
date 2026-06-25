@@ -1584,6 +1584,10 @@ export default function Home() {
         onClose={() => setCameraOpen(false)}
         onDetected={(barcode) => {
           cameraScannedRef.current = true;
+          // Clear stale item data first so the lookup doesn't match the previous item
+          scanForm.setValue("itemNumber", "");
+          scanForm.setValue("description", "");
+          setMatchedItem(null);
           scanForm.setValue("barcode", barcode, { shouldValidate: true });
           setTimeout(() => barcodeInputRef.current?.focus(), 100);
         }}
