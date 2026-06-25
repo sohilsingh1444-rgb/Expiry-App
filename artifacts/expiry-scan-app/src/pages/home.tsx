@@ -280,7 +280,7 @@ export default function Home() {
         scanSetValue("itemNumber", "");
         scanSetValue("description", "");
         // Show error toast when scanned from camera and master is loaded but barcode not found
-        if (cameraScannedRef.current && isLoaded && masterData.length > 0) {
+        if (cameraScannedRef.current && isLoaded && masterData.size > 0) {
           toast({
             title: "Barcode not found",
             description: `"${watchBarcode}" was not found in the barcode master. Check the barcode or enter details manually.`,
@@ -992,7 +992,7 @@ export default function Home() {
                         </FormControl>
                         <FormMessage />
                         {/* Inline barcode-not-found warning */}
-                        {watchBarcode && watchBarcode.length > 6 && !matchedItem && isLoaded && masterData.length > 0 && (
+                        {watchBarcode && watchBarcode.length > 6 && !matchedItem && isLoaded && masterData.size > 0 && (
                           <p className="flex items-center gap-1.5 text-xs font-medium text-red-600 mt-1">
                             <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-600 shrink-0">!</span>
                             Barcode <span className="font-mono">"{watchBarcode}"</span> not found in barcode master
