@@ -175,7 +175,8 @@ export default function Home() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [storeComboOpen, setStoreComboOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const barcodeInputRef   = useRef<HTMLInputElement>(null);
+  const cameraScannedRef  = useRef(false); // true when barcode was set by camera scan
 
   const { masterData, isLoaded, rrpCount, specialsCount, saveMasterData, clearMasterData, saveRrpData, saveSpecialsData, lookupBarcode } = useBarcodeMaster();
   const { sohData, sohByItem, saveSohData, clearSohData, loadStoreSoh, lookupSoh } = useSohData();
@@ -278,6 +279,14 @@ export default function Home() {
         setMatchedItem(null);
         scanSetValue("itemNumber", "");
         scanSetValue("description", "");
+        // Show error toast when scanned from camera and master is loaded but barcode not found
+        if (cameraScannedRef.current && isLoaded && masterData.length > 0) {
+          toast({
+            title: "Barcode not found",
+            description: `"${watchBarcode}" was not found in the barcode master. Check the barcode or enter details manually.`,
+            variant: "destructive",
+          });
+        }
       }
     } else {
       setMatchedItem(null);
@@ -286,6 +295,7 @@ export default function Home() {
         scanSetValue("description", "");
       }
     }
+    cameraScannedRef.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchBarcode, lookupBarcode]);
 
@@ -1566,6 +1576,7 @@ export default function Home() {
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
         onDetected={(barcode) => {
+          cameraScannedRef.current = true;
           scanForm.setValue("barcode", barcode, { shouldValidate: true });
           setTimeout(() => barcodeInputRef.current?.focus(), 100);
         }}
