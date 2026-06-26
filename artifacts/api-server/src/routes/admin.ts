@@ -220,12 +220,11 @@ router.get("/admin/stores", async (req, res): Promise<void> => {
 router.post("/admin/stores", async (req, res): Promise<void> => {
   if (!checkAdminPassword(req, res)) return;
 
-  const { code, name, region, emails, sohLocationCodes } = req.body as {
+  const { code, name, region, emails } = req.body as {
     code?: string;
     name?: string;
     region?: string;
     emails?: string[];
-    sohLocationCodes?: string[];
   };
 
   if (!code || !name) {
@@ -237,13 +236,12 @@ router.post("/admin/stores", async (req, res): Promise<void> => {
     return;
   }
   const regionVal = (["WR", "CR", "NR"].includes(region ?? "") ? region : "WR") as string;
-  const sohCodes = Array.isArray(sohLocationCodes) ? sohLocationCodes.map(s => s.trim()).filter(Boolean) : [];
 
   let row;
   try {
     [row] = await db
       .insert(storesTable)
-      .values({ code: code.toUpperCase().trim(), name: name.trim(), region: regionVal, emails, sohLocationCodes: sohCodes })
+      .values({ code: code.toUpperCase().trim(), name: name.trim(), region: regionVal, emails })
       .returning();
   } catch (err: unknown) {
     const msg = `${err instanceof Error ? err.message : ""} ${String(err)}`;
@@ -264,11 +262,10 @@ router.put("/admin/stores/:code", async (req, res): Promise<void> => {
   if (!checkAdminPassword(req, res)) return;
 
   const { code } = req.params;
-  const { name, region, emails, sohLocationCodes } = req.body as {
+  const { name, region, emails } = req.body as {
     name?: string;
     region?: string;
     emails?: string[];
-    sohLocationCodes?: string[];
   };
 
   if (!name) {
@@ -280,11 +277,10 @@ router.put("/admin/stores/:code", async (req, res): Promise<void> => {
     return;
   }
   const regionVal = (["WR", "CR", "NR"].includes(region ?? "") ? region : "WR") as string;
-  const sohCodes = Array.isArray(sohLocationCodes) ? sohLocationCodes.map(s => s.trim()).filter(Boolean) : [];
 
   const [row] = await db
     .update(storesTable)
-    .set({ name: name.trim(), region: regionVal, emails, sohLocationCodes: sohCodes, updatedAt: new Date() })
+    .set({ name: name.trim(), region: regionVal, emails, updatedAt: new Date() })
     .where(eq(storesTable.code, code.toUpperCase()))
     .returning();
 

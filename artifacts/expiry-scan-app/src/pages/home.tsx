@@ -183,12 +183,11 @@ export default function Home() {
   const totalSohItems = Math.max(sohData.size, sohByItem.size);
   const [storeSohMeta, setStoreSohMeta] = useState<{ count: number; uploadedAt: string | null } | null>(null);
   const { stores: storeList, getStoreByCode, getStoreRegion } = useStoreList();
-  // Pass store code as primary identifier, plus any admin-configured SOH location codes,
-  // plus the display name as a fallback for partial/fuzzy matches.
+  // Pass store code (e.g. "S0014") as primary identifier — matches ERP Location Code in SOH file.
+  // Also include display name as fallback so partial/fuzzy matches still work.
   const storeIdentifiers: string[] = setupData?.storeLocation
     ? [
         setupData.storeLocation,
-        ...(getStoreByCode(setupData.storeLocation)?.sohLocationCodes ?? []),
         getStoreByCode(setupData.storeLocation)?.name ?? '',
       ].filter(Boolean)
     : [];

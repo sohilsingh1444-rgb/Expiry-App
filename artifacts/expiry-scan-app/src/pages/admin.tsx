@@ -69,7 +69,6 @@ type StoreRow = {
   name: string;
   region: string;
   emails: string[];
-  sohLocationCodes: string[];
 };
 
 export default function AdminPage() {
@@ -112,7 +111,6 @@ export default function AdminPage() {
   const [storeName, setStoreName] = useState("");
   const [storeRegion, setStoreRegion] = useState<"WR" | "CR" | "NR">("WR");
   const [storeEmailsRaw, setStoreEmailsRaw] = useState("");
-  const [storeSohCodesRaw, setStoreSohCodesRaw] = useState("");
   const [isSavingStore, setIsSavingStore] = useState(false);
 
   const storedPassword = () => sessionStorage.getItem("admin_pw") ?? "";
@@ -514,7 +512,6 @@ export default function AdminPage() {
     setStoreName("");
     setStoreRegion("WR");
     setStoreEmailsRaw("");
-    setStoreSohCodesRaw("");
     setStoreDialog({ open: true, editing: null });
   }
 
@@ -523,7 +520,6 @@ export default function AdminPage() {
     setStoreName(store.name);
     setStoreRegion((store.region as "WR" | "CR" | "NR") || "WR");
     setStoreEmailsRaw(store.emails.join(", "));
-    setStoreSohCodesRaw((store.sohLocationCodes ?? []).join(", "));
     setStoreDialog({ open: true, editing: store });
   }
 
@@ -537,10 +533,6 @@ export default function AdminPage() {
       .split(/[,\n]+/)
       .map((e) => e.trim())
       .filter(Boolean);
-    const sohLocationCodes = storeSohCodesRaw
-      .split(/[,\n]+/)
-      .map((s) => s.trim().toUpperCase())
-      .filter(Boolean);
     const pw = storedPassword();
     setIsSavingStore(true);
     try {
@@ -548,7 +540,7 @@ export default function AdminPage() {
         const res = await fetch(apiUrl(`/admin/stores/${storeDialog.editing.code}`), {
           method: "PUT",
           headers: { "Content-Type": "application/json", "x-admin-password": pw },
-          body: JSON.stringify({ name: storeName, region: storeRegion, emails, sohLocationCodes }),
+          body: JSON.stringify({ name: storeName, region: storeRegion, emails }),
         });
         if (res.ok) {
           const updated: StoreRow = await res.json();
@@ -563,7 +555,7 @@ export default function AdminPage() {
         const res = await fetch(apiUrl("/admin/stores"), {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-admin-password": pw },
-          body: JSON.stringify({ code: storeCode, name: storeName, region: storeRegion, emails, sohLocationCodes }),
+          body: JSON.stringify({ code: storeCode, name: storeName, region: storeRegion, emails }),
         });
         if (res.ok) {
           const created: StoreRow = await res.json();
@@ -1310,18 +1302,6 @@ export default function AdminPage() {
                 ))}
               </div>
               <p className="text-zinc-500 text-xs">Region determines which RRP/Special Price columns are used from the barcode master</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-zinc-300">SOH Location Codes</Label>
-              <Input
-                value={storeSohCodesRaw}
-                onChange={(e) => setStoreSohCodesRaw(e.target.value)}
-                placeholder="e.g. S0042, GREIG, 0042"
-                className="bg-zinc-800 border-zinc-700 text-white font-mono placeholder:text-zinc-600"
-              />
-              <p className="text-zinc-500 text-xs">
-                Extra codes that match this store in the SOH file (comma-separated). The store code is always included automatically.
-              </p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-zinc-300">Email Recipients</Label>
