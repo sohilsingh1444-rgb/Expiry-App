@@ -1005,80 +1005,48 @@ export default function Home() {
                   />
 
                   {/* Matched item info panel */}
-                  {matchedItem && (matchedItem.rrp || matchedItem.rrp_CRWR || matchedItem.rrp_NR || matchedItem.rrp_WR || matchedItem.special || matchedItem.soh || totalSohItems > 0) && (() => {
-                    const crRrp    = matchedItem.rrp_CRWR || matchedItem.rrp;
-                    const nrRrp    = matchedItem.rrp_NR   || matchedItem.rrp;
-                    const wrRrp    = matchedItem.rrp_WR   || matchedItem.rrp_CRWR || matchedItem.rrp;
-                    const crSpl    = matchedItem.special_CRWR || matchedItem.special;
-                    const nrSpl    = matchedItem.special_NR;
-                    const wrSpl    = matchedItem.special_WR;
-                    const crR6     = matchedItem.rrp_CRWR_6   || matchedItem.rrp_6;
-                    const nrR6     = matchedItem.rrp_NR_6;
-                    const wrR6     = matchedItem.rrp_WR_6     || matchedItem.rrp_CRWR_6 || matchedItem.rrp_6;
-                    const crR12    = matchedItem.rrp_CRWR_12  || matchedItem.rrp_12;
-                    const nrR12    = matchedItem.rrp_NR_12;
-                    const wrR12    = matchedItem.rrp_WR_12    || matchedItem.rrp_CRWR_12 || matchedItem.rrp_12;
-                    const hasCase6  = crR6 || nrR6 || wrR6;
-                    const hasCase12 = crR12 || nrR12 || wrR12;
-                    const isCR = storeRegion === 'CR';
-                    const isNR = storeRegion === 'NR';
-                    const isWR = storeRegion === 'WR';
-                    const systemSoh = lookupSoh(watchBarcode, watchItemNumber, storeIdentifiers, storeRegion);
-                    return (
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 space-y-2 text-sm">
-                        <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Item Data</div>
-
-                        {/* Per-region price grid */}
-                        {(crRrp || nrRrp || wrRrp) && (
-                          <div className="grid grid-cols-3 gap-1 text-center">
-                            {/* CR */}
-                            <div className={`rounded-md border px-1 py-1.5 ${isCR ? 'bg-amber-100 border-amber-400' : 'bg-white border-amber-100'}`}>
-                              <div className={`text-[10px] font-bold uppercase mb-0.5 ${isCR ? 'text-amber-700' : 'text-zinc-400'}`}>CR</div>
-                              <div className="font-bold text-zinc-900 text-sm">{crRrp ? `$${crRrp}` : '—'}</div>
-                              {crSpl && <div className="text-[10px] font-semibold text-green-600 mt-0.5">Spl ${crSpl}</div>}
-                              {crR6  && <div className="text-[10px] text-zinc-500 mt-0.5">×6 ${crR6}</div>}
-                              {crR12 && <div className="text-[10px] text-zinc-500">×12 ${crR12}</div>}
-                            </div>
-                            {/* NR */}
-                            <div className={`rounded-md border px-1 py-1.5 ${isNR ? 'bg-amber-100 border-amber-400' : 'bg-white border-amber-100'}`}>
-                              <div className={`text-[10px] font-bold uppercase mb-0.5 ${isNR ? 'text-amber-700' : 'text-zinc-400'}`}>NR</div>
-                              <div className="font-bold text-zinc-900 text-sm">{nrRrp ? `$${nrRrp}` : '—'}</div>
-                              {nrSpl && <div className="text-[10px] font-semibold text-green-600 mt-0.5">Spl ${nrSpl}</div>}
-                              {nrR6  && <div className="text-[10px] text-zinc-500 mt-0.5">×6 ${nrR6}</div>}
-                              {nrR12 && <div className="text-[10px] text-zinc-500">×12 ${nrR12}</div>}
-                            </div>
-                            {/* WR */}
-                            <div className={`rounded-md border px-1 py-1.5 ${isWR ? 'bg-amber-100 border-amber-400' : 'bg-white border-amber-100'}`}>
-                              <div className={`text-[10px] font-bold uppercase mb-0.5 ${isWR ? 'text-amber-700' : 'text-zinc-400'}`}>WR</div>
-                              <div className="font-bold text-zinc-900 text-sm">{wrRrp ? `$${wrRrp}` : '—'}</div>
-                              {wrSpl && <div className="text-[10px] font-semibold text-green-600 mt-0.5">Spl ${wrSpl}</div>}
-                              {wrR6  && <div className="text-[10px] text-zinc-500 mt-0.5">×6 ${wrR6}</div>}
-                              {wrR12 && <div className="text-[10px] text-zinc-500">×12 ${wrR12}</div>}
-                            </div>
+                  {matchedItem && (matchedItem.rrp || matchedItem.special || matchedItem.soh || totalSohItems > 0) && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-1.5 text-sm">
+                      <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Item Data</div>
+                      {/* RRP row: Each / Case of 6 / Case of 12 for current store region */}
+                      {(matchedItem?.rrp || matchedItem?.rrp_6 || matchedItem?.rrp_12) && (
+                        <div className="grid grid-cols-3 gap-1.5 text-center">
+                          <div className={`bg-white rounded-md border px-1.5 py-1.5 ${matchedItem?.special ? 'border-green-200' : 'border-amber-100'}`}>
+                            <div className="text-xs text-zinc-500">RRP (Each)</div>
+                            <div className="font-bold text-zinc-900">{matchedItem?.rrp ? `$${matchedItem.rrp}` : '—'}</div>
+                            {matchedItem?.special && (
+                              <div className="text-xs font-semibold text-green-600 mt-0.5">Special ${matchedItem.special}</div>
+                            )}
+                          </div>
+                          <div className="bg-white rounded-md border border-amber-100 px-1.5 py-1.5">
+                            <div className="text-xs text-zinc-500">Case of 6</div>
+                            <div className="font-bold text-zinc-900">{matchedItem?.rrp_6 ? `$${matchedItem.rrp_6}` : '—'}</div>
+                          </div>
+                          <div className="bg-white rounded-md border border-amber-100 px-1.5 py-1.5">
+                            <div className="text-xs text-zinc-500">Case of 12</div>
+                            <div className="font-bold text-zinc-900">{matchedItem?.rrp_12 ? `$${matchedItem.rrp_12}` : '—'}</div>
+                          </div>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-2 text-center">
+                        {matchedItem?.soh && (
+                          <div className="bg-white rounded-md border border-blue-100 px-2 py-1.5">
+                            <div className="text-xs text-zinc-500">Store SOH</div>
+                            <div className="font-bold text-blue-700">{matchedItem.soh}</div>
                           </div>
                         )}
-
-                        {/* SOH row */}
-                        <div className={`grid gap-2 text-center ${(matchedItem?.soh && totalSohItems > 0) ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                          {matchedItem?.soh && (
-                            <div className="bg-white rounded-md border border-blue-100 px-2 py-1.5">
-                              <div className="text-xs text-zinc-500">Store SOH</div>
-                              <div className="font-bold text-blue-700">{matchedItem.soh}</div>
-                            </div>
-                          )}
-                          {totalSohItems > 0 && (
-                            <div className={`bg-white rounded-md border px-2 py-1.5 ${systemSoh != null ? 'border-purple-100' : 'border-zinc-100'}`}>
-                              <div className="text-xs text-zinc-500">System SOH</div>
-                              {systemSoh != null
-                                ? <div className="font-bold text-purple-700">{systemSoh}</div>
-                                : <div className="font-bold text-zinc-400">—</div>
-                              }
-                            </div>
-                          )}
-                        </div>
+                        {totalSohItems > 0 && (
+                          <div className={`bg-white rounded-md border px-2 py-1.5 ${lookupSoh(watchBarcode, watchItemNumber, storeIdentifiers, storeRegion) != null ? 'border-purple-100' : 'border-zinc-100'}`}>
+                            <div className="text-xs text-zinc-500">System SOH</div>
+                            {lookupSoh(watchBarcode, watchItemNumber, storeIdentifiers, storeRegion) != null
+                              ? <div className="font-bold text-purple-700">{lookupSoh(watchBarcode, watchItemNumber, storeIdentifiers, storeRegion)}</div>
+                              : <div className="font-bold text-zinc-400">—</div>
+                            }
+                          </div>
+                        )}
                       </div>
-                    );
-                  })()}
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
