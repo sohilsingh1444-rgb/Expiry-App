@@ -467,6 +467,16 @@ export default function Home() {
       barcodeStr = barcodeStr.slice(0, -2);
     }
 
+    // Block save if master is loaded but barcode not found
+    if (isLoaded && masterData.size > 0 && !matchedItem && barcodeStr.length > 6) {
+      toast({
+        title: "Barcode not found",
+        description: "This barcode is not in the master. Check the barcode before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const scanPayload = {
       sessionId,
       pdUserName: setupData.pdUserName,
