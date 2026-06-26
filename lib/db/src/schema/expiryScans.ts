@@ -7,6 +7,7 @@ export const storesTable = pgTable("stores", {
   name: text("name").notNull(),
   region: text("region").notNull().default("WR"),
   emails: text("emails").array().notNull().default([]),
+  sohLocationCodes: text("soh_location_codes").array().notNull().default([]),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

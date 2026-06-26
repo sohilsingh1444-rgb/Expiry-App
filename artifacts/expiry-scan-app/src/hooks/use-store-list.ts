@@ -6,6 +6,7 @@ export type StoreListItem = {
   code: string;
   name: string;
   region: "WR" | "CR" | "NR";
+  sohLocationCodes?: string[];
 };
 
 export function useStoreList() {
