@@ -960,13 +960,7 @@ export default function Home() {
         {/* LEFT COLUMN: Input & Upload */}
         <div className="space-y-6">
           <Card className="border-zinc-200 shadow-sm">
-            <CardHeader className="pt-3 pb-4 border-b border-zinc-100 bg-white rounded-t-xl">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <ScanLine className="w-5 h-5" />
-                Scan Item
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 bg-white rounded-b-xl">
+            <CardContent className="pt-4 pb-4 bg-white rounded-xl">
               <Form {...scanForm}>
                 <form onSubmit={scanForm.handleSubmit(onScanSubmit)} className="space-y-4">
                   <FormField
