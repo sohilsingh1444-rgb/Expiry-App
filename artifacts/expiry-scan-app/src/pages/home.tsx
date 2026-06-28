@@ -966,7 +966,7 @@ export default function Home() {
                 Scan Item
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-6 bg-white rounded-b-xl">
+            <CardContent className="pt-4 bg-white rounded-b-xl">
               <Form {...scanForm}>
                 <form onSubmit={scanForm.handleSubmit(onScanSubmit)} className="space-y-4">
                   <FormField
