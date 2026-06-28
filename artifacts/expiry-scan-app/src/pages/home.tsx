@@ -1146,28 +1146,6 @@ export default function Home() {
                               />
                             </FormControl>
                             <FormLabel className="text-sm font-medium text-zinc-800 cursor-pointer flex-1">Wrong RRP on shelf</FormLabel>
-                            {watchWrongRrp && (
-                              <FormField
-                                control={scanForm.control}
-                                name="wrongRrpQty"
-                                render={({ field: qf }) => (
-                                  <FormItem className="space-y-0 flex items-center gap-1">
-                                    <FormLabel className="text-xs text-zinc-500 whitespace-nowrap">Qty:</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        step="1"
-                                        placeholder="0"
-                                        className="h-7 w-16 text-xs px-2 border-red-200 focus-visible:ring-red-400"
-                                        value={qf.value ?? ""}
-                                        onChange={qf.onChange}
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-                                )}
-                              />
-                            )}
                           </div>
                         </FormItem>
                       )}
@@ -1187,28 +1165,6 @@ export default function Home() {
                               />
                             </FormControl>
                             <FormLabel className="text-sm font-medium text-zinc-800 cursor-pointer flex-1">Missing special ticket</FormLabel>
-                            {watchMissingSpecial && (
-                              <FormField
-                                control={scanForm.control}
-                                name="missingSpecialQty"
-                                render={({ field: qf }) => (
-                                  <FormItem className="space-y-0 flex items-center gap-1">
-                                    <FormLabel className="text-xs text-zinc-500 whitespace-nowrap">Qty:</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        step="1"
-                                        placeholder="0"
-                                        className="h-7 w-16 text-xs px-2 border-orange-200 focus-visible:ring-orange-400"
-                                        value={qf.value ?? ""}
-                                        onChange={qf.onChange}
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-                                )}
-                              />
-                            )}
                           </div>
                         </FormItem>
                       )}
@@ -1228,28 +1184,6 @@ export default function Home() {
                               />
                             </FormControl>
                             <FormLabel className="text-sm font-medium text-zinc-800 cursor-pointer flex-1">Not on display (system SOH exists)</FormLabel>
-                            {watchNotOnDisplay && (
-                              <FormField
-                                control={scanForm.control}
-                                name="notOnDisplayQty"
-                                render={({ field: qf }) => (
-                                  <FormItem className="space-y-0 flex items-center gap-1">
-                                    <FormLabel className="text-xs text-zinc-500 whitespace-nowrap">Qty:</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        step="1"
-                                        placeholder="0"
-                                        className="h-7 w-16 text-xs px-2 border-purple-200 focus-visible:ring-purple-400"
-                                        value={qf.value ?? ""}
-                                        onChange={qf.onChange}
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-                                )}
-                              />
-                            )}
                           </div>
                         </FormItem>
                       )}
