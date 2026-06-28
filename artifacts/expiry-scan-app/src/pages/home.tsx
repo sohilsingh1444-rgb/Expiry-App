@@ -1052,7 +1052,7 @@ export default function Home() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-[130px_1fr] gap-4">
                     <FormField
                       control={scanForm.control}
                       name="itemNumber"
