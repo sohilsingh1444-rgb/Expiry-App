@@ -489,9 +489,9 @@ export default function Home() {
       expiryDate: values.expiryDate || setupData.scanDate,
       remarks: [
         values.remarks,
-        values.wrongRrp && values.wrongRrpQty != null ? `Wrong RRP Qty: ${values.wrongRrpQty}` : null,
-        values.missingSpecialTicket && values.missingSpecialQty != null ? `Missing Ticket Qty: ${values.missingSpecialQty}` : null,
-        values.notOnDisplay && values.notOnDisplayQty != null ? `Not On Display Qty: ${values.notOnDisplayQty}` : null,
+        values.wrongRrp ? "Wrong RRP" : null,
+        values.missingSpecialTicket ? "Missing Ticket" : null,
+        values.notOnDisplay ? "Not On Display" : null,
       ].filter(Boolean).join(" | ") || undefined,
       ...(matchedItem?.rrp ? { rrp: parseFloat(String(matchedItem.rrp)) } : {}),
       ...(matchedItem?.special ? { specialPrice: parseFloat(String(matchedItem.special)) } : {}),
