@@ -1059,9 +1059,7 @@ export default function Home() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-zinc-700">Item No.</FormLabel>
-                          <FormControl>
-                            <Input {...field} className="bg-zinc-50 border-zinc-200" />
-                          </FormControl>
+                          <div className="text-zinc-900 font-medium text-sm min-h-[20px]">{field.value || <span className="text-zinc-400">—</span>}</div>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1087,9 +1085,7 @@ export default function Home() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-zinc-700">Description</FormLabel>
-                        <FormControl>
-                          <Input {...field} className="bg-zinc-50 border-zinc-200" />
-                        </FormControl>
+                        <div className="text-zinc-900 font-medium text-sm min-h-[20px]">{field.value || <span className="text-zinc-400">—</span>}</div>
                         <FormMessage />
                       </FormItem>
                     )}
