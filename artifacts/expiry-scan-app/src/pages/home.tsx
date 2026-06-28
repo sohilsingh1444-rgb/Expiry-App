@@ -1284,7 +1284,7 @@ export default function Home() {
           </Card>
 
           <Card className="border-zinc-200 shadow-sm bg-white">
-            <CardHeader className="pb-3 border-b border-zinc-100">
+            <CardHeader className="pt-3 pb-3 border-b border-zinc-100">
               <CardTitle className="text-base flex items-center gap-2">
                 <FileSpreadsheet className="w-4 h-4 text-zinc-500" />
                 Barcode Master Data
@@ -1330,7 +1330,7 @@ export default function Home() {
 
           {/* RRP Data Upload Card */}
           <Card className="border-zinc-200 shadow-sm bg-white">
-            <CardHeader className="pb-3 border-b border-zinc-100">
+            <CardHeader className="pt-3 pb-3 border-b border-zinc-100">
               <CardTitle className="text-base flex items-center gap-2">
                 <Tag className="w-4 h-4 text-emerald-500" />
                 RRP Data
@@ -1367,7 +1367,7 @@ export default function Home() {
 
           {/* Specials Data Upload Card */}
           <Card className="border-zinc-200 shadow-sm bg-white">
-            <CardHeader className="pb-3 border-b border-zinc-100">
+            <CardHeader className="pt-3 pb-3 border-b border-zinc-100">
               <CardTitle className="text-base flex items-center gap-2">
                 <Percent className="w-4 h-4 text-orange-500" />
                 Specials / Offers Data
@@ -1404,7 +1404,7 @@ export default function Home() {
 
           {/* SOH Data Card */}
           <Card className="border-zinc-200 shadow-sm bg-white">
-            <CardHeader className="pb-3 border-b border-zinc-100">
+            <CardHeader className="pt-3 pb-3 border-b border-zinc-100">
               <CardTitle className="text-base flex items-center gap-2">
                 <Database className="w-4 h-4 text-purple-500" />
                 System SOH Data
