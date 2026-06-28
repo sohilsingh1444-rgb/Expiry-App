@@ -1066,6 +1066,20 @@ export default function Home() {
                     />
                     <FormField
                       control={scanForm.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-zinc-700">Description</FormLabel>
+                          <div className="text-zinc-900 font-medium text-sm min-h-[20px]">{field.value || <span className="text-zinc-400">—</span>}</div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={scanForm.control}
                       name="qty"
                       render={({ field }) => (
                         <FormItem>
@@ -1077,41 +1091,28 @@ export default function Home() {
                         </FormItem>
                       )}
                     />
+                    <FormField
+                      control={scanForm.control}
+                      name="expiryDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="font-bold text-zinc-800">Expiry Date</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} className="h-12 bg-zinc-50 border-zinc-300 focus-visible:ring-amber-500" />
+                          </FormControl>
+                          <FormMessage />
+                          {currentStatusPreview && (
+                            <div className="mt-2 text-sm flex items-center gap-2">
+                              <span className="text-zinc-500">Preview:</span>
+                              <Badge className={getStatusColor(currentStatusPreview.status)}>
+                                {currentStatusPreview.status} ({currentStatusPreview.daysLeft} days)
+                              </Badge>
+                            </div>
+                          )}
+                        </FormItem>
+                      )}
+                    />
                   </div>
-
-                  <FormField
-                    control={scanForm.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-zinc-700">Description</FormLabel>
-                        <div className="text-zinc-900 font-medium text-sm min-h-[20px]">{field.value || <span className="text-zinc-400">—</span>}</div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={scanForm.control}
-                    name="expiryDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="font-bold text-zinc-800">Expiry Date</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} className="h-12 bg-zinc-50 border-zinc-300 focus-visible:ring-amber-500" />
-                        </FormControl>
-                        <FormMessage />
-                        {currentStatusPreview && (
-                          <div className="mt-2 text-sm flex items-center gap-2">
-                            <span className="text-zinc-500">Preview:</span>
-                            <Badge className={getStatusColor(currentStatusPreview.status)}>
-                              {currentStatusPreview.status} ({currentStatusPreview.daysLeft} days)
-                            </Badge>
-                          </div>
-                        )}
-                      </FormItem>
-                    )}
-                  />
 
                   <FormField
                     control={scanForm.control}
