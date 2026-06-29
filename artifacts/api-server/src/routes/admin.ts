@@ -64,7 +64,7 @@ async function getSetting(key: string, defaultValue: string): Promise<string> {
 
 router.post("/admin/verify", (req, res): void => {
   const adminPassword = process.env.ADMIN_PASSWORD;
-  const { password } = req.body as { password?: string };
+  const { password } = (req.body ?? {}) as { password?: string };
   if (!adminPassword || password !== adminPassword) {
     res.status(401).json({ error: "Invalid password" });
     return;
@@ -74,7 +74,7 @@ router.post("/admin/verify", (req, res): void => {
 
 router.post("/admin/it-verify", (req, res): void => {
   const itPassword = process.env.IT_PASSWORD;
-  const { password } = req.body as { password?: string };
+  const { password } = (req.body ?? {}) as { password?: string };
   if (!itPassword || password !== itPassword) {
     res.status(401).json({ error: "Invalid password" });
     return;
