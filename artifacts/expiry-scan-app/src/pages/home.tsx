@@ -164,9 +164,9 @@ export default function Home() {
 
   const persisted = loadPersistedSession();
 
-  const [isSetupComplete, setIsSetupComplete] = useState(() => !!persisted);
-  const [setupData, setSetupData] = useState<{pdUserName: string, storeLocation: string, scanDate: string} | null>(() => persisted?.setupData ?? null);
-  const [newSessionId, setNewSessionId] = useState<string | null>(() => persisted?.sessionId ?? null);
+  const [isSetupComplete, setIsSetupComplete] = useState(false);
+  const [setupData, setSetupData] = useState<{pdUserName: string, storeLocation: string, scanDate: string} | null>(null);
+  const [newSessionId, setNewSessionId] = useState<string | null>(null);
   const [showNonExpiredOnly, setShowNonExpiredOnly] = useState(false);
   const [todayDateKey, setTodayDateKey] = useState(getTodayDateKey);
   const [thresholds, setThresholds] = useState({ urgentDays: 2, nearExpiryDays: 15 });
@@ -207,8 +207,8 @@ export default function Home() {
   const setupForm = useForm<z.infer<typeof setupSchema>>({
     resolver: zodResolver(setupSchema),
     defaultValues: {
-      pdUserName: "",
-      storeLocation: "",
+      pdUserName: persisted?.setupData?.pdUserName ?? "",
+      storeLocation: persisted?.setupData?.storeLocation ?? "",
       scanDate: format(new Date(), "yyyy-MM-dd"),
     },
   });
