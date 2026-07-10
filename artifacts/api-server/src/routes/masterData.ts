@@ -53,6 +53,7 @@ function sendCompressed(res: Response, buf: Buffer): void {
   res.setHeader("Content-Encoding", "gzip");
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Vary", "Accept-Encoding");
+  res.setHeader("Cache-Control", "no-store");
   res.send(buf);
 }
 
@@ -60,6 +61,7 @@ function sendCompressed(res: Response, buf: Buffer): void {
 
 router.get("/barcode-master/meta", async (_req, res): Promise<void> => {
   const settings = await getSettings(["bm_uploaded_at", "bm_count"]);
+  res.setHeader("Cache-Control", "no-store");
   res.json({ uploadedAt: settings.get("bm_uploaded_at") ?? null, count: Number(settings.get("bm_count") ?? 0) });
 });
 
@@ -168,6 +170,7 @@ router.delete("/admin/barcode-master", async (req, res): Promise<void> => {
 
 router.get("/rrp-data/meta", async (_req, res): Promise<void> => {
   const settings = await getSettings(["rrp_uploaded_at", "rrp_count"]);
+  res.setHeader("Cache-Control", "no-store");
   res.json({ uploadedAt: settings.get("rrp_uploaded_at") ?? null, count: Number(settings.get("rrp_count") ?? 0) });
 });
 
@@ -236,6 +239,7 @@ router.delete("/admin/rrp-data", async (req, res): Promise<void> => {
 
 router.get("/specials-data/meta", async (_req, res): Promise<void> => {
   const settings = await getSettings(["specials_uploaded_at", "specials_count"]);
+  res.setHeader("Cache-Control", "no-store");
   res.json({ uploadedAt: settings.get("specials_uploaded_at") ?? null, count: Number(settings.get("specials_count") ?? 0) });
 });
 
@@ -304,6 +308,7 @@ router.delete("/admin/specials-data", async (req, res): Promise<void> => {
 
 router.get("/soh-data/meta", async (_req, res): Promise<void> => {
   const settings = await getSettings(["soh_uploaded_at", "soh_count"]);
+  res.setHeader("Cache-Control", "no-store");
   res.json({ uploadedAt: settings.get("soh_uploaded_at") ?? null, count: Number(settings.get("soh_count") ?? 0) });
 });
 
